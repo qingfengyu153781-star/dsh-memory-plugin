@@ -1,4 +1,0 @@
-{"kind": "report", "gate": "g_vision", "ok": false, "checked": 3, "cam_checked": 0, "can_see": false, "summary": "视觉核验：3 条图像结论，3 条没给看了哪张；且**当前无法看图**（**无法看图**：凭证 DEEPSEEK_API_KEY 缺失或读不到（<HOM）", "ts": "2026-10-16T18:31:02"}
-{"kind": "report", "gate": "g_vision", "ok": true, "checked": 2, "cam_checked": 0, "can_see": false, "summary": "视觉核验：2 条图像结论，全部有帧号/图名佐证", "ts": "2026-10-16T18:31:02"}
-{"kind": "report", "gate": "g_vision", "ok": false, "checked": 3, "cam_checked": 0, "can_see": false, "summary": "视觉核验：3 条图像结论，3 条没给看了哪张；且**当前无法看图**（**无法看图**：凭证 DEEPSEEK_API_KEY 缺失或读不到（<HOM）", "ts": "2026-10-16T18:31:43"}
-{"kind": "report", "gate": "g_vision", "ok": true, "checked": 2, "cam_checked": 0, "can_see": false, "summary": "视觉核验：2 条图像结论，全部有帧号/图名佐证", "ts": "2026-10-16T18:31:43"}

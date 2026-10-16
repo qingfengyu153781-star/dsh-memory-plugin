@@ -5,3 +5,19 @@ _tmp/
 *._bak_*
 *.bak-*
 *.bak
+
+# ── 运行台账 / 快照：运行时副产物，不是源码 ──────────────────────────
+# 实测教训（2026-10-16）：`_guard_ledger/*.jsonl`、`guard/ledger/*.jsonl` 曾是
+# **已跟踪**文件，共约 1300 行运行日志随公开仓发布——内含本机临时目录全路径
+# （C:\Users\<名>\AppData\Local\Temp\...）、报告原文、以及别的项目的内容。
+# 台账是"跑一次长一行"的副产物 ⇒ 一律不进仓。
+**/_guard_ledger/
+_guard_vault/
+guard/ledger/*.jsonl
+
+# ── 本机专有配置 ────────────────────────────────────────────────────
+# `project_roots.json` 是**项目名 → 项目根**映射（项目名本身即隐私）；
+# 且它在公开仓里是孤儿（读取方 run_cases.py 并未随融合件发布）。
+# 本机路径写进通用件的坑：换成 <WORKSPACE> 占位符，或放 `*.local.json`。
+guard/tools/project_roots.json
+guard/tools/*.local.json
