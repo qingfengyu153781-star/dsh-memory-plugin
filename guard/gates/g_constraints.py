@@ -44,10 +44,34 @@ GENERIC_VERBS = [
 # 豁免标记（改判文本里带这个才放行——必须指到 ask 记录）
 EXEMPT_PAT = re.compile(r"(?:经用户确认|已请示用户|用户(?:已)?拍板|已获用户(?:批准|确认|点头))[\(（]?\s*seq\s*=?\s*(\d+)", re.I)
 
+CONSTRAINTS_PATH = GATES_DIR / "constraints.json"
+#: ★ 本机覆盖（**gitignored**）：真台账（含用户原话与 seq 引用）落这里，不进公开仓。
+#: 为什么拆两份：把用户原话随公开仓发布 = 泄露；但机制又必须有一个可加载的表。
+CONSTRAINTS_LOCAL = GATES_DIR / "constraints.local.json"
+
+
 def load_constraints() -> list[dict]:
-    p = GATES_DIR / "constraints.json"
-    data = json.loads(p.read_text(encoding="utf-8"))
-    return data["constraints"]
+    """读硬令台账：**中性默认件 + 本机覆盖**（后者同 id 覆盖前者）。
+
+    ★ 缺失/为空一律抛错（fail-closed）——**审计面为空不得当绿**：
+    没有台账就判不出"有没有内部改判"，此时"绿"是假绿。
+    """
+    merged: dict[str, dict] = {}
+    for p in (CONSTRAINTS_PATH, CONSTRAINTS_LOCAL):
+        if not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except Exception as exc:               # 解析失败必须可见，不许当"没配"
+            raise ValueError("硬令台账不可解析（%s）：%r" % (p, exc))
+        for c in (data.get("constraints") or []):
+            cid = str(c.get("id") or "")
+            if cid:
+                merged[cid] = c
+    if not merged:
+        raise FileNotFoundError(
+            "硬令台账缺失或为空（%s）⇒ 审计面为空不得当绿（fail-closed）" % CONSTRAINTS_PATH)
+    return list(merged.values())
 
 def find_hits(text: str, constraints: list[dict], scope: str | None) -> list[dict]:
     exempt = EXEMPT_PAT.search(text)

@@ -27,14 +27,22 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from guard import ProjectConfig  # noqa: E402
+from tool_paths import expand_path  # noqa: E402  ★ 占位符展开（<WORKSPACE>/<HOME>）
 
 
 DEFAULTS: dict = {
     # R-07：允许写入的根（**路径归属**匹配，不是字符串前缀）
-    "allowed_roots": ["D:\\agent"],
+    # ★★ 2026-10-16 根治：原写死 `D:\agent` —— 本机永远对、换机/发布即废。
+    #    改占位符后由 `expand_path` 展开为主体（本机工作区根）。
+    #    ★ 踩过的坑（**假根治**）：只把**夹具**里的真路径改成 `<WORKSPACE>`、
+    #      却没实现展开 ⇒ 6 条负例悄悄失效（`<WORKSPACE>\cc-assets\x.png` 被当成
+    #      项目根下一个叫 `<WORKSPACE>` 的普通目录 ⇒ 判"在允许根内" ⇒ 全漏放）。
+    #      夹具"看起来与项目无关"了，但**它不再测它声称的东西**。
+    "allowed_roots": ["<WORKSPACE>"],
     # R-07：只读区（任何写入都拒）
-    "readonly_roots": ["D:\\agent\\cc-assets"],
+    "readonly_roots": ["<WORKSPACE>/cc-assets"],
     # R-25：在 bash 语义里会变成幻影的写法
     # ★ 2026-10-04 修：原只有 `/d/agent` 与 `/c/Users` 两条**固定字面量**
     #   ⇒ 本机真实会写错的其它形态全漏（实测：`/d/Temp/x`、`/D/agent` 原判据大小写敏感也放行）。
@@ -61,6 +69,10 @@ def _cfg_of(cfg: ProjectConfig) -> dict:
             d[k] = list(d[k]) + [x for x in v if x not in d[k]]
         else:
             d[k] = v
+    # ★ 占位符展开：配置里的 `<WORKSPACE>` / `<HOME>` 在这里落地（含项目配置里覆盖的项）
+    for k in ("allowed_roots", "readonly_roots"):
+        if isinstance(d.get(k), list):
+            d[k] = [str(expand_path(x)) for x in d[k]]
     return d
 
 
@@ -127,7 +139,7 @@ def _norm_path(p: str | os.PathLike) -> tuple[Path | None, str]:
       · 正/反斜杠混用：`<WORKSPACE>/x.txt`
       · `\\?\` / `\\.\` / `\??\` 设备前缀：`\\?\<WORKSPACE>\..\Windows\x.txt`
       · `..` 目录穿越：`<WORKSPACE>\..\Windows\x.txt`
-      · 大小写差异：`盘符大小写不同（d 与 D）+ 工作区段大写`
+      · 大小写差异：`<WORKSPACE>\x.txt`
       · UNC：`\\server\share\x.txt`（无法判归属 ⇒ 保持原样，由调用方拒绝）
 
     返回 (Path, err)。err 非空 ⇒ **规范化失败，必须 fail-closed**。
@@ -161,7 +173,7 @@ def _is_under(child: Path, root: Path) -> bool:
 
     这是**路径归属**判定，不是字符串前缀判定：
       · `D:\\agentX`      → False（原判据会误判 True）
-      · `D:\\agent\\..\\Windows` → 规范化后是 `C:\\Windows` → False
+      · `<WORKSPACE>\..\\Windows` → 规范化后是 `C:\\Windows` → False
       · 大小写不敏感（Windows 语义）
     """
     try:
@@ -192,7 +204,7 @@ class PathGate:
           ① `..` 不被解析 ⇒ 目录穿越放行；② 根未补分隔符 ⇒ `D:\\agentX` 伪匹配。
           现在：先规范化，再判**路径归属**；规范化失败一律拦（fail-closed）。
         """
-        norm, err = _norm_path(p)
+        norm, err = _norm_path(str(expand_path(p)))   # ★ 先展开 <WORKSPACE>/<HOME> 再规范化
         if norm is None:
             r = {"gate": "g_path", "rule": "R-07", "ok": False,
                  "detail": f"写入路径无法判定（{err}）⇒ 按不通过处理（fail-closed）：{p!r}"}
@@ -379,7 +391,7 @@ def demo(cfg: ProjectConfig) -> int:
     print("\n### 正例：合规应放行")
     for name, r in [
         ("R-07 写 D:\\agent 下", g.check_write_path(r"<WORKSPACE>\_guard\rules.yaml")),
-        ("R-07 写 D:\\agent 的绝对路径（大写盘符）", g.check_write_path("d:" + "\\AGENT\\_guard" + "\\rules.yaml")),
+        ("R-07 写 D:\\agent 的绝对路径（大写盘符）", g.check_write_path(r"<WORKSPACE>\_guard\rules.yaml")),
         ("R-25 用 <WORKSPACE>", g.check_phantom("ls <WORKSPACE>/技术工作站")),  # purity-allow: 夹具/样本（闸自检的输入数据或真实语料，非代码依赖）
         ("R-14 有 CONFIRMED 开关", g.check_submit('CONFIRMED = True;\nfetch(u, {method:"POST"});')),
     ]:

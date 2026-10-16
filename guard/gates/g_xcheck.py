@@ -51,7 +51,7 @@ from guard import ProjectConfig  # noqa: E402
 
 #: 本机专有路径**不进代码**（R-56）：从 tools/tool_paths.json 读（环境变量可覆盖）
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-from tool_paths import tool_path  # noqa: E402
+from tool_paths import tool_path, expand_path  # noqa: E402
 
 
 def _isnum(x: str) -> bool:
@@ -191,12 +191,23 @@ class XCheckGate:
                 r = subprocess.run([sys.executable, str(self.mem), "grep", q, "--scope", "atoms"],
                                    capture_output=True, text=True, encoding="utf-8",
                                    errors="replace", timeout=self.timeout)
-                hit = "精确匹配" in (r.stdout or "") and "0 条" not in (r.stdout or "")
+                # ★★ 2026-10-16 根治（**判据量错对象**，出在闸自己身上）：
+                #   原判据是 `"精确匹配" in out and "0 条" not in out` ——
+                #   而 `"20 条"` 里**包含子串 `"0 条"`** ⇒ 命中 20 条被判"零命中"！
+                #   ⇒ 它绿不绿竟然取决于**命中数的末位是不是 0**（<10 绿、涨到 20 红）。
+                #   这类"用子串猜数字"的判据一律改成：**解析出数字，按数字判**；
+                #   解析不出来 ⇒ **未验**（不许把"没解析出来"当成"零命中"）。
                 n = re.search(r"精确匹配\s*(\d+)\s*条", r.stdout or "")
-                cnt = int(n.group(1)) if n else 0
+                if n is None:
+                    out.append({"item": "X3", "what": q[:40], "ok": None, "hits": None,
+                                "detail": "查询输出无法解析 ⇒ **未验**（不当零命中）：%s"
+                                          % (r.stdout or r.stderr or "")[:80]})
+                    continue
+                cnt = int(n.group(1))
+                hit = cnt > 0
                 out.append({"item": "X3", "what": q[:40], "ok": hit, "hits": cnt,
                             "detail": (f"库中命中 {cnt} 条" if hit
-                                       else f"**库中零命中** —— 该『原话』在 1,152 个会话里找不到")})
+                                       else "**库中零命中** —— 该『原话』在全库范围内找不到")})
             except Exception as e:  # noqa: BLE001
                 out.append({"item": "X3", "what": q[:40], "ok": None, "detail": f"查询失败：{e}"})
         return out
@@ -421,7 +432,7 @@ def demo(cfg: ProjectConfig) -> int:
 
     # ── 负例 1：编造的文件路径
     print("### 负例 1：报告引用一个不存在的文件")
-    bad1 = "本次改动落在 `D:\\agent\\_guard\\gates\\g_nonexistent.py`，已核验。"
+    bad1 = f"本次改动落在 `{expand_path('<WORKSPACE>/_guard/gates/g_nonexistent.py')}`，已核验。"
     r1 = g.check_text(bad1, items=["X1"])
     hit = not r1["ok"]
     print(f"  {'✓✓ 拦住' if hit else '✗✗ 漏了'}  {r1['summary'][:100]}")
@@ -431,15 +442,22 @@ def demo(cfg: ProjectConfig) -> int:
 
     # ── 负例 2：编造 md5
     print("### 负例 2：md5 与盘上不符")
-    real = Path(r"<WORKSPACE>\_guard\rules.yaml")
+    # ★★ 2026-10-16 修：这里原来写的是**字面** `<WORKSPACE>\_guard\rules.yaml` ——
+    #   占位符没人展开 ⇒ `real.exists()` 恒假 ⇒ **整条负例静默不跑**，
+    #   而自检照样打印"通过"。这正是本闸要治的"假通过"发生在闸自己身上。
+    #   现在：① 用 expand_path 真展开；② 样本不可用时**显式记不合格**，不许静默跳过。
+    real = expand_path("<WORKSPACE>/_guard/rules.yaml")
     if real.exists():
         fake_md5 = "f" * 32
-        bad2 = f"该文件 md5 {fake_md5}，已核对。路径 D:\\agent\\_guard\\rules.yaml"
+        bad2 = f"该文件 md5 {fake_md5}，已核对。路径 {real}"
         r2 = g.check_text(bad2, items=["X2"])
         hit = not r2["ok"]
         print(f"  {'✓✓ 拦住' if hit else '✗✗ 漏了'}  {r2['summary'][:110]}")
         if not hit:
             fails += 1
+    else:
+        print(f"  ✗ 负例 2 无法执行：样本路径不存在（{real}）⇒ 记不合格（不许静默跳过）")
+        fails += 1
     print()
 
     # ── 负例 3：编造"用户原话"
@@ -469,7 +487,8 @@ def demo(cfg: ProjectConfig) -> int:
 
     # ── 正例 2：真存在的路径
     print("### 正例 2：真存在的路径（应通过）")
-    good2 = "改动落在 `D:\\agent\\_guard\\rules.yaml` 与 `D:\\agent\\_guard\\gates\\g_struct.py`。"
+    good2 = (f"改动落在 `{expand_path('<WORKSPACE>/_guard/rules.yaml')}` 与 "
+             f"`{expand_path('<WORKSPACE>/_guard/gates/g_struct.py')}`。")
     r5 = g.check_text(good2, items=["X1"])
     print(f"  {'✓ 通过' if r5['ok'] else '✗ 误判：' + r5['summary'][:80]}")
     if not r5['ok']:

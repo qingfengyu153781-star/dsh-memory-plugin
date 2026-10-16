@@ -53,7 +53,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from guard import ProjectConfig  # noqa: E402
+from tool_paths import expand_path  # noqa: E402  ★ 展开 <WORKSPACE>/<HOME>
 
 CONFIG_REL = "tools/selfwrite_scan_roots.json"
 
@@ -97,8 +99,8 @@ class SelfWriteGate:
                  scan: list[str] | None = None):
         self.cfg = cfg
         self.c = load_cfg()
-        self.db = Path(db) if db else Path(self.c.get("db", ""))
-        self.scan = [Path(s) for s in (scan or self.c.get("scan_roots") or [])]
+        self.db = Path(db) if db else expand_path(self.c.get("db", ""))
+        self.scan = [expand_path(s) for s in (scan or self.c.get("scan_roots") or [])]
 
     # ------------------------------------------------------------------ S1/S2
     def check_db(self) -> list[dict]:
@@ -207,7 +209,7 @@ class SelfWriteGate:
     # ------------------------------------------------------------------ S4
     def check_audit_dir(self) -> list[dict]:
         d = self.c.get("audit_dir")
-        p = Path(d) if d else None
+        p = expand_path(d) if d else None
         if not p:
             return [{"id": "S4", "rule": "自写自读", "ok": None,
                      "detail": "登记表未给 audit_dir ⇒ **未核**"}]

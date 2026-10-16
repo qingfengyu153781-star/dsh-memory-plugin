@@ -13,7 +13,9 @@
  */
 
 import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, dirname, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { fileURLToPath } from 'node:url'
 import {
   loadConfig, saveConfig, stats, recentDecisions,
   shouldOrchestrate, orchestrate, hasForceSignal, isOwnInjectionText, INJECT_TAGS, logDecision,
@@ -70,14 +72,25 @@ export function echoThreshold(baseDir = BASE) {
   try { return Number(loadConfig(baseDir).echoRatioMax ?? 0.6) } catch { return 0.6 }
 }
 
-const BASE = 'D:\\agent\\dsh-rag-memory'
+// ★ 2026-10-16：不写死本机路径（写死了换机即废，且发布即泄露本机布局）。
+//   顺序：环境变量 → local.config.json（随插件目录、gitignored）→ 自推导（上溯两级即记忆库）。
+const _PLUGIN = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+function _localCfg() {
+  for (const p of [join(_PLUGIN, 'local.config.json'),
+                   resolve(_PLUGIN, '..', '..', 'local.config.json')]) {
+    try { if (existsSync(p)) return JSON.parse(readFileSync(p, 'utf8')) } catch { /* 继续 */ }
+  }
+  return {}
+}
+const BASE = process.env.DSH_MEMORY_BASE || _localCfg().memoryBase
+  || resolve(_PLUGIN, '..', '..')
 
 /** 读 DSH 已配置的模型清单（给面板下拉用）。 */
 export function listModels() {
   const out = []
   const cands = [
-    'C:\\Users\\pop\\.dsh\\settings.yaml',
-    'C:\\Users\\pop\\.dsh\\settings.yaml.imported',
+    join(homedir(), '.dsh', 'settings.yaml'),
+    join(homedir(), '.dsh', 'settings.yaml.imported'),
   ]
   for (const p of cands) {
     try {
@@ -278,7 +291,7 @@ function _noticeFor(s) {
     '它本轮**没有做编排级挑选**，已回落成普通召回（记忆仍会注入，只是没经编排器挑）。',
     `最后一次错误：${s.lastErr || '(未知)'}`,
     '若错误是 5xx / `Connection error` / `empty stream`，多半是**上游线路故障**，不是编排器坏了。',
-    '排查：`python D:\\agent\\dsh-rag-memory\\bin\\mem.py orchestrate-status`',
+    `排查：\`python ${join(BASE, 'bin', 'mem.py')} orchestrate-status\``,
     '</memory-orchestrator-alert>',
   ].join('\n')
 }
@@ -433,7 +446,7 @@ export function registerRoutes(webCtx, baseDir = BASE) {
       fn: () => {
         const out = { plugin: 'dsh-memory-plugin', checks: {} }
         try {
-          const self = 'D:\\agent\\dsh-rag-memory\\plugin-src\\dsh-memory-plugin'
+          const self = _PLUGIN
           const pkgPath = join(self, 'package.json')
           const raw = readFileSync(pkgPath, 'utf8')
           const pkg = JSON.parse(raw)

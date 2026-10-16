@@ -287,8 +287,8 @@ def load(name: str | None = None, project_root: str | os.PathLike | None = None,
          cwd: str | os.PathLike | None = None, fallback: bool = True) -> ProjectConfig:
     """装载配置。四种用法：
        load()                    → 从 cwd 自动识别（零参数，推荐）
-       load("巫山女")             → 指定项目名，根自动识别
-       load("巫山女", r"D:\\...")  → 两者都指定
+       load("示例项目A")             → 指定项目名，根自动识别
+       load("示例项目A", r"D:\\...")  → 两者都指定
        load(fallback=True)       → 认不出项目时，退到通用默认配置（闸门逻辑照跑）
     """
     if name and project_root:

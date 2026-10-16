@@ -61,7 +61,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from guard import ProjectConfig  # noqa: E402
+from tool_paths import expand_path  # noqa: E402  ★ 展开 <WORKSPACE>/<HOME>
 
 CONFIG_REL = "tools/memory_hygiene.json"
 
@@ -88,7 +90,8 @@ class HygieneGate:
     def __init__(self, cfg: ProjectConfig):
         self.cfg = cfg
         self.paths = load_paths(cfg)
-        self.mem_root = Path(self.paths["mem_root"]) if self.paths.get("mem_root") else None
+        self.mem_root = (expand_path(self.paths["mem_root"])
+                         if self.paths.get("mem_root") else None)
 
     # ---------------------------------------------------------------- 载入被测代码
     def _load_memlib(self):

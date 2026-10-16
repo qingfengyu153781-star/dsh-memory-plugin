@@ -312,12 +312,12 @@ python _guard/gates/g_mem.py --text-file <报告>  # 判报告里提到的重活
   # 用户点破：「建模的问题固化进知识库，为什么我的要求后面还是会跑偏？」
   # 实测：闸 41/41 全接上、编排器 179 次成功，**但 41 条里没有一条管"用户要求有没有被执行"**。
   # ⇒ 闸能保证「做得对不对」，保证不了「是不是用户要的那件事」。
-  # 实证代价：巫山女会话 142 轮，构件全合规，整座山方向错 ⇒ 42 轮返工后整座山被删。
+  # 实证代价：示例项目A会话 142 轮，构件全合规，整座山方向错 ⇒ 42 轮返工后整座山被删。
   # ══════════════════════════════════════════════════════════════════════
 
   - id: R-42
     rule: 开轮必须把用户原话落成「要求锚」(BRIEF)，收尾时必须逐条对账；凡宣布完成/交付/达标，BRIEF 里不许有「未兑现」项
-    src: "用户 2026-10-04『为什么我的要求后面还是会跑偏』；实证：巫山女 4 次自宣交付（seq 10185/10353/10483/10582）时，8 条要求里 R1/R6/R8 三条全程未达标，无任何闸拦下"
+    src: "用户 2026-10-04『为什么我的要求后面还是会跑偏』；实证：示例项目A 4 次自宣交付（seq 10185/10353/10483/10582）时，8 条要求里 R1/R6/R8 三条全程未达标，无任何闸拦下"
     gate: g_brief
     check: "python _guard/gates/g_brief.py --init --session <会话.jsonl> --goal \"<goal原文>\" --out BRIEF.md
 python _guard/gates/g_brief.py --text-file <报告> --brief BRIEF.md
@@ -327,7 +327,7 @@ python _guard/gates/g_brief.py --text-file <报告> --brief BRIEF.md
 
   - id: R-43
     rule: 声称「用户选了/用户要求/按你的意思」必须给出处（turn=N / seq=N / 逐字引号），给不出即视为脑补
-    src: "实证：巫山女 seq=1783 写「你选了『白模级』」而无出处（该决定实际在 seq=1780）；同类措辞在会话中反复出现且从不带出处"
+    src: "实证：示例项目A seq=1783 写「你选了『白模级』」而无出处（该决定实际在 seq=1780）；同类措辞在会话中反复出现且从不带出处"
     gate: g_brief
     check: "python _guard/gates/g_brief.py --text-file <报告> [--brief BRIEF.md]
 # 反例（该拦）：『你选了「白模级」，所以我按白模做。』
@@ -336,15 +336,15 @@ python _guard/gates/g_brief.py --text-file <报告> --brief BRIEF.md
 
   - id: R-44
     rule: 「用户原话」只认 source.kind=='user' 与 ask_user_question 的真实答复；goal/team-message/runtime-context 等注入内容一律不得当用户原话
-    src: "实证：巫山女会话 663 条 user/message 里只有 35 条是真人原话（其余 628 条是注入）；把注入当原话是『要求被曲解』的第一大来源"
+    src: "实证：示例项目A会话 663 条 user/message 里只有 35 条是真人原话（其余 628 条是注入）；把注入当原话是『要求被曲解』的第一大来源"
     gate: g_brief
     check: "python _guard/gates/g_brief.py --init --session <会话.jsonl> --out BRIEF.md
-# 判据：抽出的条数须与 source.kind=='user' 的实际条数一致（巫山女应为 35 + 4）"
+# 判据：抽出的条数须与 source.kind=='user' 的实际条数一致（示例项目A应为 35 + 4）"
     kind: enforced
 
   - id: R-45
     rule: 不理解或有疑问 ⇒ 必须先提问，绝对不开工；提问后未获答复也不许开工。同时禁止滥问——答案已写在剧本/台账/文档里的，先自己查，查不到再问
-    src: "用户 2026-10-04 明令『增加一个闸用于理解用户真正的需求，不理解或者有疑问就使用提问，绝对不开工』；实证代价：巫山女会话用户要『巍峨嶙峋』，Lead 没问『什么样的算巍峨』就按坡度直方图猜了 20+ 轮，最终 42 轮造山全废、整座山被删（seq 10660/10689）"
+    src: "用户 2026-10-04 明令『增加一个闸用于理解用户真正的需求，不理解或者有疑问就使用提问，绝对不开工』；实证代价：示例项目A会话用户要『巍峨嶙峋』，Lead 没问『什么样的算巍峨』就按坡度直方图猜了 20+ 轮，最终 42 轮造山全废、整座山被删（seq 10660/10689）"
     gate: g_ask
     check: "python _guard/gates/g_ask.py --demo                              # 负例自检
 python _guard/gates/g_ask.py --note \"<要做的事>\" [--ask <问题>]...  # 开工前拦
@@ -473,7 +473,7 @@ python _guard/gates/g_loop.py --rounds <rounds.jsonl> --user-text <用户话>  #
 
   - id: R-56
     rule: 通用层纯净性——`_guard/gates/*.py` 与 `_guard/*.py`（跨项目通用层）的**代码**里不许出现具体项目的内容（项目名 / 指向它的绝对路径）；路径一律从配置读（tools/*.json、projects/*.yaml），代码里用 HERE/GUARD 相对定位。判据**只扫字符串字面量与 import**——注释/docstring 里注明出处不算（判据要量对对象）
-    src: "2026-10-15 立，学自 lingshu（FuRongJun-1999）tools/import_direction_lint.py 与 docs/architecture.md §6.2 受控面纪律（受控面由显式配置声明、不随判定时 cwd 变化）。起因实证：2026-10-14 本人把 Path(r'D:\\agent\\dsh-rag-memory') 写死进 g_silent.py 作扫描根——通用性当场破，而本机跑永远是对的（换项目才炸）；已改为读 tools/silent_scan_roots.json"
+    src: "2026-10-15 立，学自 lingshu（FuRongJun-1999）tools/import_direction_lint.py 与 docs/architecture.md §6.2 受控面纪律（受控面由显式配置声明、不随判定时 cwd 变化）。起因实证：2026-10-14 本人把 Path(r'<WORKSPACE>\dsh-rag-memory') 写死进 g_silent.py 作扫描根——通用性当场破，而本机跑永远是对的（换项目才炸）；已改为读 tools/silent_scan_roots.json"
     gate: g_purity
     check: "python _guard/guard_cli.py purity（绿=无超基线项）；负例自检：purity --demo（4 例，含『docstring 注明出处不误报』『同行 purity-allow 放过』）；改动基线：gates/g_purity.py --update-baseline（首建 35 文件/23 处存量）"
     kind: detected

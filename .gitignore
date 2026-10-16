@@ -9,7 +9,7 @@ _tmp/
 # ── 运行台账 / 快照：运行时副产物，不是源码 ──────────────────────────
 # 实测教训（2026-10-16）：`_guard_ledger/*.jsonl`、`guard/ledger/*.jsonl` 曾是
 # **已跟踪**文件，共约 1300 行运行日志随公开仓发布——内含本机临时目录全路径
-# （C:\Users\<名>\AppData\Local\Temp\...）、报告原文、以及别的项目的内容。
+# （%TEMP% 下的临时目录全路径）、报告原文、以及别的项目的内容。
 # 台账是"跑一次长一行"的副产物 ⇒ 一律不进仓。
 **/_guard_ledger/
 _guard_vault/
@@ -21,3 +21,13 @@ guard/ledger/*.jsonl
 # 本机路径写进通用件的坑：换成 <WORKSPACE> 占位符，或放 `*.local.json`。
 guard/tools/project_roots.json
 guard/tools/*.local.json
+# 本地专有词表（别的项目名/机器名）：随仓发布 = 用『治泄露的工具』再泄露一次。
+# 格式见同目录 hygiene_forbidden.example.json。
+guard/tools/hygiene_forbidden.json
+guard/tools/tool_paths.local.json
+# 本机覆盖件：真台账（含用户原话/seq）与真禁止清单（含项目名）。
+# 公开件是同名去掉 .local 的中性默认件，两个读取器都会并起来用。
+guard/gates/constraints.local.json
+guard/tools/purity_deny.local.txt
+# 本机路径配置（路径解析链的中间一环）：真路径只落本机，不进公开仓。
+local.config.json

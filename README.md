@@ -1,9 +1,9 @@
 # dsh-memory-plugin
 
-一个**可安装的最小 DSH 插件骨架**：把 `D:\agent\dsh-rag-memory\bin\mem.py` 的跨会话记忆检索
+一个**可安装的最小 DSH 插件骨架**：把 `<WORKSPACE>\dsh-rag-memory\bin\mem.py` 的跨会话记忆检索
 暴露成模型可调用的 `memory_recall` 工具，并在每轮对话的第一个 step 自动把命中的历史片段注入上下文。
 
-- 版本基线：**DSH 运行时 0.2.0-rc.2**（本机 `D:\deepseekzmd\resources\app.asar\dsh`，见 `../research/PLUGIN_API.md`）
+- 版本基线：**DSH 运行时 0.2.0-rc.2**（本机 `<DSH-CHECKOUT>`，见 `../research/PLUGIN_API.md`）
 - 零运行时依赖：`index.js` 只 import `node:child_process` / `node:crypto`，**不 import 任何 `@deepseek-ai/*`**
 - 失败开放：mem.py 出错 / 超时 / 不存在 → 不注入，绝不让这一轮对话失败
 
@@ -35,7 +35,7 @@ bundle 行没有 `config` schema（`package.json` 里也没声明 `dsh.bundle.co
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `DSH_MEMORY_PYTHON` | `python` | Python 解释器 |
-| `DSH_MEMORY_SCRIPT` | `D:\agent\dsh-rag-memory\bin\mem.py` | mem.py 绝对路径 |
+| `DSH_MEMORY_SCRIPT` | `<WORKSPACE>\dsh-rag-memory\bin\mem.py` | mem.py 绝对路径 |
 | `DSH_MEMORY_AUTO` | 启用 | 设为 `0` 关闭自动注入，只保留工具 |
 | `DSH_MEMORY_K` | `6` | 自动注入的召回条数 |
 | `DSH_MEMORY_TIMEOUT` | `20000` | 单次 mem.py 调用毫秒上限 |
@@ -65,11 +65,11 @@ bundle 行没有 `config` schema（`package.json` 里也没声明 `dsh.bundle.co
 $ node --check index.js
 SYNTAX-CHECK: OK (node --check index.js)
 
-$ node -e "const m = require('D:/agent/dsh-rag-memory/plugin-src/dsh-memory-plugin/index.js'); console.log(...)"
+$ node -e "const m = require('<REPO>/index.js'); console.log(...)"
 REQUIRE-CHECK: OK -> {"name":"dsh-memory-plugin","inject":["tools"],"apply":"function"}
 
 $ node test/selfcheck.mjs
-PASS  import D:\agent\dsh-rag-memory\plugin-src\dsh-memory-plugin\index.js
+PASS  import <WORKSPACE>\dsh-rag-memory\plugin-src\dsh-memory-plugin\index.js
 PASS  export apply is a function
 PASS  export name = dsh-memory-plugin
 PASS  export inject = ["tools"]
@@ -108,7 +108,7 @@ SELF-CHECK: ALL PASS
 ```powershell
 # 1) 先完全退出 DeepSeek Harness Desktop（CLI 会在 profile 被占用时拒绝操作）
 # 2) 安装本目录为一个 profile bundle
-dsh plugin --profile desktop add D:\agent\dsh-rag-memory\plugin-src\dsh-memory-plugin
+dsh plugin --profile desktop add <WORKSPACE>\dsh-rag-memory\plugin-src\dsh-memory-plugin
 
 # 3) 只验证组合树，不启动服务
 dsh --profile desktop --dump-config | Select-String -Pattern 'dsh-memory-plugin' -Context 2,2
@@ -155,13 +155,13 @@ dsh-memory-plugin/
 | E | **系统提示加两条硬纪律**：① 派活/下发硬参数前先核专条并把出处写进消息；② 检索到的旧记录必须先确认是否已被取代（P82/P84 的教训） | —— | 常开 |
 
 **验收**：`npm test`（= `node test/selfcheck.mjs && node test/inject.mjs`），共 **4 + 40** 条断言全绿；
-持续监测由 `D:\agent\qa-gates\` 的 **G-14 记忆注入质量闸** / **G-15 记忆使用纪律闸** 承担。
+持续监测由 `<WORKSPACE>\qa-gates\` 的 **G-14 记忆注入质量闸** / **G-15 记忆使用纪律闸** 承担。
 
 **生效方式**：host 端插件**需重启 DSH**；重启后 stderr 应出现
 `[dsh-memory-plugin] loaded v0.1.5 (auto=…, weak=hint, subagent=compact, dedup=30min, format=digest, …)`，
 或访问 `GET /dsh-memory/health` 看 `version` 与 `policy`。
 
-**修复账（含改前/改后 md5）**：`D:\agent\dsh-rag-memory\reports\FIX_LEDGER_memory_plugin_20261002.md`
+**修复账（含改前/改后 md5）**：`<WORKSPACE>\dsh-rag-memory\reports\FIX_LEDGER_memory_plugin_20261002.md`
 
 ### v0.1.4（2026-10-01）— query 清洗 + 回声过滤 + 6000 字上限
 
@@ -229,3 +229,28 @@ dsh-memory-plugin/
 ` 写实 4 次（R-63 拦）、护栏自己的假通过 1 次（R-65 自检拦）、`syntax` CLI 静默漏查 1 次（自检拦）——没有一次带进交付物。
 
 > **勘误记录**：本节初版曾误用**单个会话**（`session-45a2f49f`，44.99 小时 / 57 轮）当"循环时长"，且把"轮次编号 57"与"真人消息 121"混用——**口径错误，已按全库重算**。
+
+### 7. 对外发布面的根治（2026-10-16）——**两次假绿，一次自检红，逐层剥开**
+
+这一节记的是"把护栏融合进本插件并推上 GitHub"之后的**收敛过程**。三次失败都是**我自己的机制骗了我**，值得留档：
+
+| # | 现象 | 真因（逐层实测） | 根治 |
+|---|---|---|---|
+| ① | **已发布的仓里满是本机路径与别的项目的内容，而卫生扫描器报「0 命中」** | `PATH-WIN` 正则只认 `<盘符>:\agent\` 这种**单反斜杠**写法，而 JS/JSON 源码里是**双反斜杠的转义形态** ⇒ 整类漏掉；且只扫**行内容**、没有**路径级**规则 ⇒ 约 1300 行运行台账被跟踪发布也照绿；别的项目名**根本不在规则表里** | 正则改 `{1,2}`；新增**路径级** `RT-*`（台账/备份整类）；新增 `PROJ-NAME`（词表放**本地 gitignored** 文件——把项目名写进规则表＝用治泄露的工具再泄露一次）；新增 **`--selftest`**（14 条负例，抓不到即红）；新增 `--tracked`（以 `git ls-files` 为对外面权威口径） |
+| ② | **融合件的自检在 GitHub 上是红的**（`path` 6 项 / `xcheck` 1 项 / 对抗电池 31 项）而我并不知道 | 融合时把夹具里的真路径**改成了占位符 `<WORKSPACE>`，却没实现展开** ⇒ `path` 的 6 条负例全部失效（判"在允许根内"）；`xcheck` 的负例 2 因 `real.exists()` 恒假而**静默不跑**；`g_vision` 演示甚至**崩在最后一步**（存图路径含字面占位符）。另有缺件：`tools/adversarial/**` 未随融合件发布 | 给 `tool_paths` **实现** `<WORKSPACE>`/`<HOME>` 展开并用在 `g_path`/`g_xcheck`/`g_vision`/4 个配置读取方；样本对补齐；硬令台账与纯净性清单拆成"**中性默认件 + 本机 `.local`（gitignored）**" |
+| ③ | 沙箱外的**每次触发都要靠我记得** | "改 guard/ 就要跑 selftest"只是脑子里的规矩 | 接进 `tools/integrations.json`：**改动落在 `guard/` 下 ⇒ 自动跑** 护栏自检（38 道闸）＋ 对外面卫生扫描 ＋ 插件回归（79 项）；红了在报告里当场拦下 |
+| ④ | `xcheck` 的正例**时而绿时而红**（同代码、相隔 80 秒） | 判据写成 `"0 条" not in 输出` —— 而 `"20 条"` **里包含子串 `"0 条"`** ⇒ 命中 20 条被判成"零命中"。**它绿不绿取决于命中数的末位是不是 0**（<10 绿、涨到 20 红） | 改成**解析出数字、按数字判**；解析不出来记**未验**（"没解析出来" ≠ "零命中"） |
+
+**这一轮的验收读数（均可复跑）**：
+
+```
+python guard/guard_cli.py selftest                    # 38 道闸 → 全部通过
+python guard/tools/public_hygiene_scan.py . --tracked # 76 个已跟踪文件 → 无命中
+python guard/tools/public_hygiene_scan.py --selftest  # 仪器自证 14/14
+npm test                                              # 79 passed / 0 failed
+python guard/gates/g_integ.py --changed "<guard 下任一文件>"   # 3 项集成自动跑，全绿
+```
+
+**勘误**：提交 `e4fd784` 与 `c657ff7`（含之后的 `9e85959`）发布时，**融合件自检是红的**、卫生扫描是**假绿**。本节的修正在其后一并推上；口径以**本节的四条读数**为准，不看提交信息。
+
+> 一句话：**"它报干净"必须能被证伪** —— 所以扫描器要有自证（`--selftest`）、护栏要有出厂门（`selftest`）、对外面要有权威口径（`--tracked`），三者缺一，绿就只是"没人查"。

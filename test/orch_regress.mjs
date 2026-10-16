@@ -17,12 +17,12 @@ import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { tmpdir } from 'node:os'
+import { tmpdir, homedir } from 'node:os'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const ROOT = join(here, '..')
 const INSTALLED = process.env.ORCH_PLUGIN_DIR
-  || 'C:\\Users\\pop\\.dsh\\profiles\\desktop\\node_modules\\dsh-memory-plugin'
+  || join(homedir(), '.dsh', 'profiles', 'desktop', 'node_modules', 'dsh-memory-plugin')
 
 let pass = 0, fail = 0
 const ok = (name) => { pass += 1; console.log(`  ✓ ${name}`) }
@@ -238,7 +238,7 @@ console.log('\n【L 测试不得污染生产台账（第六轮）】')
 // ⇒ `orchestrate-status` 的"最近 20 轮"100% 被测试会话占满 ⇒ 误报 STATUS=broken。
 // 修法：插件支持 `DSH_MEMORY_BASE`，测试写临时目录。这条判据 = 跑一次 selfcheck，看生产台账有没有长。
 {
-  const LEDGER = process.env.ORCH_LEDGER || 'D:\\agent\\dsh-rag-memory\\orchestrator\\decisions.jsonl'
+  const LEDGER = process.env.ORCH_LEDGER || join(ROOT, '..', '..', 'orchestrator', 'decisions.jsonl')
   const nRows = () => {
     try { return readFileSync(LEDGER, 'utf8').trim().split('\n').filter(Boolean).length } catch { return -1 }
   }

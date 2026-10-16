@@ -52,7 +52,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from guard import ProjectConfig  # noqa: E402
+from tool_paths import expand_path  # noqa: E402  ★ 展开 <WORKSPACE>/<HOME>
 
 HERE = Path(__file__).resolve().parent.parent
 CFG = HERE / "tools" / "integrations.json"
@@ -120,11 +122,12 @@ class IntegGate:
                     #   （实测 FileNotFoundError）。先 which 解析，再经 cmd.exe 起。
                     argv[0] = shutil.which(argv[0]) or argv[0]
                     r = subprocess.run(subprocess.list2cmdline(argv), shell=True,
-                                       cwd=it.get("cwd") or None, capture_output=True,
+                                       cwd=str(expand_path(it["cwd"])) if it.get("cwd") else None, capture_output=True,
                                        text=True, encoding="utf-8", errors="replace",
                                        timeout=tmo)
                 else:
-                    r = subprocess.run(argv, cwd=it.get("cwd") or None, capture_output=True,
+                    r = subprocess.run(argv, cwd=str(expand_path(it["cwd"])) if it.get("cwd") else None,
+                                       capture_output=True,
                                        text=True, encoding="utf-8", errors="replace",
                                        timeout=tmo)
             except subprocess.TimeoutExpired:

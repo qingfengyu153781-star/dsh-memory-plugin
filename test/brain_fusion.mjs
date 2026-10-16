@@ -16,11 +16,14 @@
  * 用法：node test/brain_fusion.mjs          退出码 0 = 全过
  */
 import { spawnSync } from 'node:child_process'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { buildDigestBlock } from '../lib/index.js'
 
 const PY = process.env.DSH_MEMORY_PYTHON ?? 'python'
-const SCRIPT = process.env.DSH_MEMORY_SCRIPT ?? 'D:\\agent\\dsh-rag-memory\\bin\\mem.py'
-const REPO = 'D:\\agent\\dsh-rag-memory'
+const here = dirname(fileURLToPath(import.meta.url))          // <plugin>/test
+const REPO = process.env.DSH_MEMORY_BASE ?? join(here, '..', '..', '..')   // 上溯三级 = 记忆库
+const SCRIPT = process.env.DSH_MEMORY_SCRIPT ?? join(REPO, 'bin', 'mem.py')
 const QUERY = '跨版本合并 去重键 调用标识'
 
 let pass = 0

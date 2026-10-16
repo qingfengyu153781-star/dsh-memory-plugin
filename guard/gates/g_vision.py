@@ -45,7 +45,7 @@ from guard import ProjectConfig  # noqa: E402
 
 #: 本机专有路径**不进代码**（R-56）：从 tools/tool_paths.json 读（环境变量可覆盖）
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-from tool_paths import tool_path  # noqa: E402
+from tool_paths import tool_path, expand_path  # noqa: E402
 
 
 def _cred_path() -> Path:
@@ -365,7 +365,12 @@ def demo(cfg: ProjectConfig) -> int:
     print()
 
     print("### ④ 真去看一张图（若无法看图，必须明说）")
-    img = Path(r"<WORKSPACE>\_guard\_vtest.png")
+    # ★★ 2026-10-16 修：这里原来写的是**字面** `<WORKSPACE>\_guard\_vtest.png` ——
+    #   占位符没人展开 ⇒ `Image.save` 抛 OSError: Invalid argument ⇒
+    #   演示**崩在最后一步**（自检报失败），而前面的用例都"通过"。
+    #   这就是"只占位不展开 = 假根治"的第三种表现：不是漏判，是**根本跑不完**。
+    img = expand_path("<WORKSPACE>/_guard/_vtest.png")
+    img.parent.mkdir(parents=True, exist_ok=True)
     try:
         from PIL import Image  # type: ignore
         im = Image.new("RGB", (200, 120), (200, 60, 60))
@@ -393,7 +398,7 @@ def demo(cfg: ProjectConfig) -> int:
         if not hit:
             fails += 1
     #   正例（不许误杀）：没提图的普通报告必须照旧跳过
-    rp = vg.check_report("我检查了 3 个文件，引用 D:\\agent\\AGENTS.md 第 12 行。")
+    rp = vg.check_report("我检查了 3 个文件，引用 <WORKSPACE>\AGENTS.md 第 12 行。")
     if rp.get("ok") is True:
         print("  ✓ 不误杀：无图像结论的报告照旧跳过")
     else:

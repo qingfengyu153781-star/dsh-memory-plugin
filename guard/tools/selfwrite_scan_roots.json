@@ -2,20 +2,20 @@
   "_intro": "自写自读闸（R-61）的扫描面配置。判据是『会写记忆库的代码 ∧ 属自检类 ⇒ 必须有隔离根』这个**三元形态**；本地路径不进通用层代码（R-56）。",
   "_frozen_at": "2026-10-15T19:50+08:00",
 
-  "db": "D:\\agent\\dsh-rag-memory\\index\\memory.sqlite",
+  "db": "<WORKSPACE>/dsh-rag-memory\\index\\memory.sqlite",
 
   "relevant_patterns": ["dsh-rag-memory", "memlib", "memory.sqlite",
                         "_guard/gates", "_guard/tools", "_guard/hook.py"],
   "_relevant_note": "hook.py 的自动路用它判断『本次改动是否会引入自写自读违规』（命中 ⇒ 无条件跑闸；否则 900 s 节流兜底）。放配置里是因为通用层代码不许写死项目路径（R-56 / g_purity）。",
 
   "scan_roots": [
-    "D:\\agent\\_guard\\gates",
-    "D:\\agent\\_guard\\tools",
-    "D:\\agent\\_guard\\hook.py"
+    "<WORKSPACE>/_guard\\gates",
+    "<WORKSPACE>/_guard\\tools",
+    "<WORKSPACE>/_guard\\hook.py"
   ],
   "_scan_note": "scan_roots 逐个 rglob('*.py')。hook.py 若不是目录会被跳过（列为**扫描根不存在**并计入 violations？否——本闸把它记为可见告警）。",
 
-  "audit_dir": "D:\\agent\\_guard\\_guard_ledger",
+  "audit_dir": "<WORKSPACE>/_guard\\_guard_ledger",
   "_audit_note": "自检类写入的去处：审计面（只追加、不进检索面）。对应灵枢 #263 的 action_logs 取向。",
 
   "forbidden_session_regex": "^(selfcheck|selftest|self_test|stub|test|fixture)",

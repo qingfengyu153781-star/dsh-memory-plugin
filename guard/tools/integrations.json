@@ -4,13 +4,33 @@
 
   "integration": [
     {
+      "name": "★ 融合护栏自检（38 道闸全跑；**改到 guard/** 即自动触发**）",
+      "_why": "2026-10-16 立：融合件曾在 GitHub 上**自检是红的**（path 6 项 / xcheck 1 项 / 电池 31 项）而我并不知道 —— 因为『改 guard/ 要跑 selftest』只是我脑子里的规矩。这条把它变成机器动作：改了 guard/ 下的东西，本项自动跑，红了就在报告里拦下。",
+      "patterns": [
+        "plugin-src/dsh-memory-plugin/guard/"
+      ],
+      "cwd": "<WORKSPACE>/dsh-rag-memory\\plugin-src\\dsh-memory-plugin",
+      "cmd": ["python", "guard/guard_cli.py", "selftest"],
+      "timeout_seconds": 900
+    },
+    {
+      "name": "★ 对外面卫生扫描（凭据/本机路径/运行台账/项目名；**命中即红**）",
+      "_why": "2026-10-16 立：同一个扫描器曾报『0 命中』而仓里满是最不该上传的东西（双反斜杠盲区 + 无路径级规则 + 无项目名词表）。它现在带 --tracked（以 git ls-files 为权威口径）与 --selftest（自证抓得到）。",
+      "patterns": [
+        "plugin-src/dsh-memory-plugin/"
+      ],
+      "cwd": "<WORKSPACE>/dsh-rag-memory\\plugin-src\\dsh-memory-plugin",
+      "cmd": ["python", "guard/tools/public_hygiene_scan.py", ".", "--tracked"],
+      "timeout_seconds": 300
+    },
+    {
       "name": "dsh-memory-plugin 全量回归（selfcheck + inject + 脑融合 + orch_regress）",
       "patterns": [
         "plugin-src/dsh-memory-plugin/",
         "src/memlib/brain.py",
         "bin/mem.py"
       ],
-      "cwd": "D:\\agent\\dsh-rag-memory\\plugin-src\\dsh-memory-plugin",
+      "cwd": "<WORKSPACE>/dsh-rag-memory\\plugin-src\\dsh-memory-plugin",
       "cmd": ["npm", "test"],
       "timeout_seconds": 600
     },
@@ -21,7 +41,7 @@
         "src/memlib/",
         "index/memory.sqlite"
       ],
-      "cwd": "D:\\agent\\dsh-rag-memory",
+      "cwd": "<WORKSPACE>/dsh-rag-memory",
       "cmd": ["python", "bin/mem.py", "orchestrate-status"],
       "timeout_seconds": 300
     }

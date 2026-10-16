@@ -5,7 +5,7 @@
   "_why_baseline_not_threshold": "缺口用**绝对条数**记，不用百分比阈值：阈值一改就能变绿（假根治）。基线含义是「存量缺口就这么些，只防新增」——与灵枢 tools/*_lint.py 的 baseline 纪律同款（只上尺子定基线、只防新增；判因在前，不许只改数字）。",
   "_json_quote_rule": "本文件里凡是中文行文内的引用一律用「」，**不许用 ASCII 双引号**——2026-10-15 我为此把本文件写坏过四次（JSON 解析失败），而 g_prov 对解析失败是 fail-closed 判红，等于闸自己瘫了。",
 
-  "db": "D:\\agent\\dsh-rag-memory\\index\\memory.sqlite",
+  "db": "<WORKSPACE>/dsh-rag-memory\\index\\memory.sqlite",
   "_db_note": "本机记忆库路径放在登记面，通用层代码不写死（R-56）。",
   "relevant_patterns": ["dsh-rag-memory", "memlib", "memory.sqlite"],
   "_relevant_note": "hook.py 的自动路用它判断「本次改动是否会引入来源面违规」（命中 ⇒ 无条件跑；否则按窗口节流）。放配置里是因为通用层代码不许写死具体项目路径或项目名（R-56 / g_purity）。",
@@ -14,10 +14,10 @@
     "_why": "★ 把「核验批次」从『要人记得跑』改成自动兜底：入库收尾已自动核本次新增（bin/mem.py 的收尾核验），这里再兜一层——防止**非入库路径**（别的写入方/旧批次）留下未核验原子。判据是 pending 数量门槛 + 节流 + 遇入库锁自动跳过，**跳过也会写明原因**。",
     "cmd": ["python", "-X", "utf8", "bin/mem.py", "verify-atoms",
             "--method", "raw_reopen", "--limit", "8000", "--apply"],
-    "cwd": "D:\\agent\\dsh-rag-memory",
+    "cwd": "<WORKSPACE>/dsh-rag-memory",
     "min_pending": 500,
     "throttle_seconds": 900,
-    "lock_file": "D:\\agent\\dsh-rag-memory\\index\\.ingest.lock",
+    "lock_file": "<WORKSPACE>/dsh-rag-memory\\index\\.ingest.lock",
     "timeout_seconds": 300
   },
 
@@ -82,7 +82,7 @@
       "provided": true,
       "columns": ["observation_position"],
       "baseline_gap": 0,
-      "_note": "2026-10-15 由「代理」升为「提供」：新建 `atoms.observation_position` 列（入库时由 pipeline.stamp_position 写入 + 存量按 sessions 表 join 回填 326,106 条，缺口 0）。形态＝`源·会话来源·工作区`（如 `dsh·user·D:\\agent`）。★ 诚实边界：粒度**止于会话**，不是逐条记录——原始记录里没有逐条的观测位字段；且**没有**灵枢那种物理观测位（感知·摄像头 / 感知·屏幕）。"
+      "_note": "2026-10-15 由「代理」升为「提供」：新建 `atoms.observation_position` 列（入库时由 pipeline.stamp_position 写入 + 存量按 sessions 表 join 回填 326,106 条，缺口 0）。形态＝`源·会话来源·工作区`（如 `dsh·user·<WORKSPACE>/`）。★ 诚实边界：粒度**止于会话**，不是逐条记录——原始记录里没有逐条的观测位字段；且**没有**灵枢那种物理观测位（感知·摄像头 / 感知·屏幕）。"
     },
     "q3_tool": {
       "provided": true,

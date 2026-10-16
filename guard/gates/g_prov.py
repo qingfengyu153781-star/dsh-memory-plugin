@@ -52,7 +52,9 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 from guard import ProjectConfig  # noqa: E402
+from tool_paths import expand_path  # noqa: E402  ★ 展开 <WORKSPACE>/<HOME>
 
 REGISTRY_REL = "tools/prov_registry.json"
 STATE_REL = "_guard_ledger/prov_state.json"
@@ -102,7 +104,7 @@ class ProvGate:
     def __init__(self, cfg: ProjectConfig, db: str | None = None):
         self.cfg = cfg
         self.reg = load_registry()
-        self.db = Path(db) if db else Path(self.reg.get("db", ""))
+        self.db = Path(db) if db else expand_path(self.reg.get("db", ""))
 
     # ------------------------------------------------------------------ 工具
     @staticmethod

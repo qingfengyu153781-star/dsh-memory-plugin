@@ -173,7 +173,7 @@ def demo(cfg: ProjectConfig) -> int:
         ("正例 2：中文正文 + 代码块/路径（不该误杀）",
          "已把快照挂到写操作上，回档是一条命令：\n"
          "```bash\npython guard_cli.py vault-rollback 12\n```\n"
-         "文件落在 `D:\\agent\\_guard\\gates\\g_vault.py`，回档后自动比对 md5，一致才算成功。",
+         "文件落在 `<WORKSPACE>\_guard\\gates\\g_vault.py`，回档后自动比对 md5，一致才算成功。",
          True),
         # ★★ 2026-10-04 新增（治"整篇达标就放行"这个真实缺口）：
         #   形态 = 大段中文正文把一整段英文结论"稀释"掉 ⇒ 整篇 ratio 达标、照样交付。

@@ -163,13 +163,13 @@ def demo(cfg: ProjectConfig | None = None) -> int:
         #    ★夹具不能用 `AKIA…EXAMPLE`：AWS 官方示例值含 "EXAMPLE"，而已按
         #      PLACEHOLDER_PATS 排除（那是**正当**的示例值）⇒ 会被判不命中（实测踩过）。
         #      要测"真形态能被抓"，夹具就得用**不含占位符特征**的值。
-        f.write_text('AWS = "AKIA" + "IOSFODNN7EXAMPLE"\n', encoding="utf-8")
+        f.write_text('AWS = "AKIA' + '3K7QZ9WX2MPL4NVT"\n', encoding="utf-8")
         r1 = scan.scan([str(base)])
         print("  ① 假 AWS key            -> 命中 %d（应 ≥1）" % r1["hit_total"])
         ok &= r1["hit_total"] >= 1
 
         # ② 同行 hygiene-allow ⇒ 必须放过（豁免是行级、显式、可 grep）
-        f.write_text('AWS = "AKIA" + "IOSFODNN7EXAMPLE"  # hygiene-allow: 确属公开示例值\n',
+        f.write_text('AWS = "AKIA' + '3K7QZ9WX2MPL4NVT"  # hygiene-allow: 确属公开示例值\n',
                      encoding="utf-8")
         r2 = scan.scan([str(base)])
         print("  ② 同行 hygiene-allow    -> 命中 %d（应 0）" % r2["hit_total"])
@@ -182,10 +182,10 @@ def demo(cfg: ProjectConfig | None = None) -> int:
         ok &= r3["hit_total"] == 0
 
         # ④ 输出必须打码（不把凭据原文写进报告）
-        f.write_text('api_key = "sk-" + "TESTKEYEXAMPLE123"\n', encoding="utf-8")
+        f.write_text('api_key = "sk-' + 'abcdefghijklmnopqrstuvwxyz123456"\n', encoding="utf-8")
         rep4 = scan.scan([str(base)])
         rendered = scan.render(rep4)
-        leaked = "sk-" + "TESTKEYEXAMPLE123" in rendered
+        leaked = ("sk-" + "abcdefghijklmnopqrstuvwxyz123456") in rendered
         print("  ④ 报告是否原文泄露凭据  -> %s（应 False）" % leaked)
         ok &= (not leaked) and rep4["hit_total"] >= 1
 

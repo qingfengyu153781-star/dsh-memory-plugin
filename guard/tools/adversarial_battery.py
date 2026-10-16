@@ -51,6 +51,41 @@ GATES = GUARD / "gates"
 FIX = GUARD / "tools" / "adversarial"
 LEDGER = GUARD / "_guard_ledger" / "adversarial.jsonl"
 
+_SAMPLE_TMP: Path | None = None
+
+
+def _sample_tmp() -> Path:
+    global _SAMPLE_TMP
+    if _SAMPLE_TMP is None:
+        import tempfile
+        _SAMPLE_TMP = Path(tempfile.mkdtemp(prefix="adv_samples_"))
+    return _SAMPLE_TMP
+
+
+def expand_sample(p: Path) -> Path:
+    """把样本里的 `<WORKSPACE>` / `<HOME>` **展开后落临时副本**，再交给闸。
+
+    ★ 为什么要这一步（2026-10-16 实测）：
+      · 样本里若**写死本机路径** ⇒ 随公开仓发布即泄露（归档扫描实测抓到 4 处）；
+      · 但只写 `<WORKSPACE>` 而**没人展开** ⇒ 闸拿到的路径不存在 ⇒
+        `must_pass` 变**假报错**（明明合规却判红）。
+      ⇒ 样本保持中性 + **电池负责填** = 两头都对。这也正是"占位符必须有人展开"的又一例。
+    """
+    txt = p.read_text(encoding="utf-8", errors="replace")
+    if "<WORKSPACE>" not in txt and "<HOME>" not in txt:
+        return p
+    sys.path.insert(0, str(GUARD / "tools"))
+    try:
+        from tool_paths import workspace_root
+        root = str(workspace_root())
+    except Exception as exc:                       # 不静默：展不开就说清楚
+        print(f"[adv] 占位符无法展开（{exc!r}）⇒ 样本按原文使用", file=sys.stderr)
+        root = ""
+    txt = txt.replace("<WORKSPACE>", root).replace("<HOME>", str(Path.home()))
+    out = _sample_tmp() / (p.parent.name + "__" + p.name)   # 各闸同名文件不许互相覆盖
+    out.write_text(txt, encoding="utf-8")
+    return out
+
 # 自检类闸：**故意不配文本样本**及原因（必须写明，不许默认豁免）
 DEMO_ONLY = {
     "g_cap": "读本机已装插件/技能目录，样本会随机器变化",
@@ -116,7 +151,7 @@ def check_pair(name: str, gate: Path, d: Path | None = None) -> list[dict]:
     marker = str(expect.get("must_block_output_contains", "") or "")
 
     # ① must_block：必须判红 **且** 到达标记出现（只判红不算过 —— 抓"假根治"）
-    rc, out = run_gate(gate, ["--text-file", str(d / "must_block.md")])
+    rc, out = run_gate(gate, ["--text-file", str(expand_sample(d / "must_block.md"))])
     blocked = rc != 0
     reached = (marker == "") or (marker in out)
     rows.append({"gate": name, "kind": "must_block", "ok": blocked and reached,
@@ -126,7 +161,7 @@ def check_pair(name: str, gate: Path, d: Path | None = None) -> list[dict]:
                              if blocked else "**放行了违规样本（假通过）**"))})
 
     # ② must_pass：必须判绿（抓"假报错/误杀"）
-    rc2, out2 = run_gate(gate, ["--text-file", str(d / "must_pass.md")])
+    rc2, out2 = run_gate(gate, ["--text-file", str(expand_sample(d / "must_pass.md"))])
     rows.append({"gate": name, "kind": "must_pass", "ok": rc2 == 0, "rc": rc2,
                  "detail": "合规样本放行" if rc2 == 0 else "**拦下了合规样本（假报错）**："
                            + out2.strip().splitlines()[-1][:80] if out2.strip() else "**拦下了合规样本（假报错）**"})

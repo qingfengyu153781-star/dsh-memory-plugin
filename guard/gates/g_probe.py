@@ -107,7 +107,7 @@ class ProbeGate:
 
 
 def demo(cfg: ProjectConfig) -> int:
-    """复刻《巫山女》S01-1 里真实发生过的两次'假绿'。"""
+    """复刻《示例项目A》S01-1 里真实发生过的两次'假绿'。"""
     g = ProbeGate(cfg)
     fails = 0
 

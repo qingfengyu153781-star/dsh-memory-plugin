@@ -11,11 +11,11 @@
 
 `_guard` 的价值在于「**任何项目都不改代码就能用**」（`g_mem` 的注释里就写着
 "跨项目：阈值来自 config.mem；本文件不含项目专有内容"）。但这条**没有东西在跑**——
-一旦有人图省事把 `Path(r"D:\\agent\\<某项目>")` 写进闸里，通用性当场破，而且**没人会发现**
+一旦有人图省事把 `Path(r"<WORKSPACE>\<某项目>")` 写进闸里，通用性当场破，而且**没人会发现**
 （在本机跑永远是对的，换机/换项目才炸）。
 
 实证（本条闸的起因）：**2026-10-14 我自己在 `g_silent.py` 里写死了
-`Path(r"D:\\agent\\dsh-rag-memory")`** 作为扫描根——正是这条纪律要防的形态。
+`Path(r"<WORKSPACE>\dsh-rag-memory")`** 作为扫描根——正是这条纪律要防的形态。
 已改为从 `tools/silent_scan_roots.json` 读。
 
 ## 来源
@@ -34,7 +34,7 @@ lingshu（FuRongJun-1999）的 `tools/import_direction_lint.py`（依赖方向�
 
 **为什么排除 docstring 与注释**：要量的是"**代码依赖**"，不是"文本提及"——
 件头写「本件移植自 lingshu」是**注明出处**（正当），而
-`Path(r"D:\\agent\\lingshu")` 才是依赖。判据必须量对对象。
+`Path(r"<WORKSPACE>\lingshu")` 才是依赖。判据必须量对对象。
 
 ## 用法
 
@@ -61,6 +61,9 @@ from guard import ProjectConfig  # noqa: E402
 
 TOOLS = GUARD / "tools"
 DENY_PATH = TOOLS / "purity_deny.txt"
+#: ★ 本机覆盖（**gitignored**）：真项目名/真路径落这里，不进公开仓
+#: （否则"治泄露的清单"自己就把项目名发布了 —— 2026-10-16 实测教训）。
+DENY_LOCAL = TOOLS / "purity_deny.local.txt"
 #: 存量基线（每文件允许的命中数）——「只防新增」，抄 lingshu 四个 lint 的共同模式
 BASELINE_PATH = TOOLS / "purity_baseline.txt"
 
@@ -112,15 +115,26 @@ ALLOW_MARKER = "purity-allow"
 
 
 def load_deny() -> list[tuple[str, re.Pattern]]:
-    """读禁止清单。缺失或为空 ⇒ 抛错（不静默放行）。"""
-    if not DENY_PATH.exists():
-        raise FileNotFoundError("禁止清单缺失：%s（fail-closed）" % DENY_PATH)
+    """读禁止清单：**中性默认件 + 本机覆盖**（两份并起来）。
+
+    缺失或为空 ⇒ 抛错（不静默放行）——但判据里的"空"指**两份合起来**为空，
+    这样公开仓（只有中性件）与开发机（中性件 + .local）都能跑。
+    """
     rules: list[tuple[str, re.Pattern]] = []
-    for line in DENY_PATH.read_text(encoding="utf-8", errors="replace").splitlines():
-        s = line.strip()
-        if not s or s.startswith("#"):
+    seen: set[str] = set()
+    exists = False
+    for p in (DENY_PATH, DENY_LOCAL):
+        if not p.exists():
             continue
-        rules.append((s, re.compile(s)))
+        exists = True
+        for line in p.read_text(encoding="utf-8", errors="replace").splitlines():
+            s = line.strip()
+            if not s or s.startswith("#") or s in seen:
+                continue
+            seen.add(s)
+            rules.append((s, re.compile(s)))
+    if not exists:
+        raise FileNotFoundError("禁止清单缺失：%s（fail-closed）" % DENY_PATH)
     if not rules:
         raise ValueError("禁止清单为空（%s）——审计面为空不得当绿" % DENY_PATH)
     return rules
