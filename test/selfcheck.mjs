@@ -97,8 +97,8 @@ if (typeof mod.cleanQuery === 'function') {
     //   所以这里断言"只留小话标记、样板一个字不剩"，并另测小话轮判定与 query 组装。
     ['样板 + 小尾巴“继续” → 只留小话标记（样板一字不剩）', `${runtimeContext}\n继续`, '继续'],
     ['真实提问 → 保留', `${runtimeContext}\n上次镜17a 换脸最后是怎么解决的？`, '上次镜17a 换脸最后是怎么解决的？'],
-    // 2026-10-01：会话 session-50b8ffea 用的是另一套措辞，老名单没盖住 →
-    // 那次注入的 query 变成了「Approval policy: ask. …」样板文字（实测记录 seq=12 22:57:25）
+    // 2026-10-01：会话 <会话> 用的是另一套措辞，老名单没盖住 →
+    // 那次注入的 query 变成了「Approval policy: ask. …」样板文字
     ['另一套运行环境措辞（Approval policy: ask）→ 只留真问题',
       'Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\n\n'
       + 'Current DSH file policy: workspace-write.\n\n'
@@ -250,7 +250,7 @@ if (preStep !== undefined) {
     return {
       verdict: 'strong', topScore: 9.3, sufficient: true, note: '',
       hits: [{
-        session_id: 'session-50b8ffea-1b5d-4e48-b127-0a47854e8a46', turn: 173 + (h % 7), chunk_id: h,
+        session_id: '<会话>-1b5d-4e48-b127-0a47854e8a46', turn: 173 + (h % 7), chunk_id: h,
         time_start: 1790862139396, kind: 'turn', score: 9.3, text: `打桩命中 ${tag}：「廊柱专条 Ø0.22 × 高 2.80」`,
         _session: { origin: 'user', title: 'stub' },
       }],
@@ -298,7 +298,7 @@ if (preStep !== undefined) {
   }
 
   // ★ 2026-10-15(8)：**回声过滤**（用户否决上一轮"形状闸"后的根治版）
-  //   用户原话：「<用户原话已隐去：否决粗暴切割式判据>」
+  //   用户原话：「…」
   //   ⇒ 判据改成"候选有没有 query 之外的信息增量"，与句子长短/是否重复**无关**。
   const stubRecall = (text) => mod.__setRecallFn(async () => ({
     ok: true, exitCode: 0, stderr: '',

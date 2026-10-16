@@ -118,7 +118,7 @@ AUDIT_TOKENS: Tuple[str, ...] = ("warn", "log", "print", "raise", "audit", "erro
 
 MAX_SNIPPET = 160
 
-# 「登记面」用户登记段标记（--update-baseline 逐字保留其间内容；工具不解析、不豁免）
+# 「…」用户登记段标记（--update-baseline 逐字保留其间内容；工具不解析、不豁免）
 REG_BEGIN = "# ── 登记面 · 用户登记（--update-baseline 保留本段逐字）──"
 REG_END = "# ── 登记面 · 结束 ──"
 
@@ -179,7 +179,7 @@ def parse_baseline(text: str) -> Tuple[Dict[str, int], List[str]]:
 
 
 def _extract_registration(existing_text: Optional[str]) -> List[str]:
-    """从既有基线文本中取出「用户登记段」逐字内容（--update-baseline 保留它）。
+    """从既有基线文本中取出「…」逐字内容（--update-baseline 保留它）。
 
     用户登记段由 `REG_BEGIN` 行开启、`REG_END` 行结束；返回其间的行（不含两个标记行）。
     找不到标记时返回空列表（不报错——旧版基线没有该段）。

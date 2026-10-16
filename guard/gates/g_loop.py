@@ -8,11 +8,11 @@
 | 时刻 | 事件 |
 |---|---|
 | 10-03 19:36 | 用户敲 `/goal <学建模原文>`，`maxGoalRounds: 256` |
-| 10-04 02:46 | 用户说「**你这椅子不像现实的**」 |
+| 10-04 02:46 | 用户说「…」 |
 | 10-04 09:16 → 11:25 | **自动续跑 turn_45~54，共 10 轮 / 2 小时 9 分，用户全程不在场** |
 | 10-04 11:21 | 一次上下文压缩（用户发话前 4 分钟） |
-| 10-04 11:25 | 用户说「**不合格**」 |
-| 10-04 11:26 | 用户补一句「我说的是制作不合格，你再多机位看看」，随后 goal 被 pause |
+| 10-04 11:25 | 用户说「…」 |
+| 10-04 11:26 | 用户补一句「…」，随后 goal 被 pause |
 
 **⇒ 用户 02:46 已经明确表达不满，之后 8.5 小时仍全自动跑。**
 **平均每 10 分钟自动产生一轮，52 轮里 36% 被事后判定为"原地打转"。**
@@ -166,7 +166,7 @@ class LoopGate:
         turns: dict[int, dict] = {}
         cur_turn: int | None = None
         # ★ 归属规则（实测档序，2026-10-04）：turn/start(N) **先于**该轮的 user/message
-        #   （seq4=turn/start turn=1 → seq8=user/message），而 user/message **没有
+        #   ，而 user/message **没有
         #   data.turn 字段**（keys=content/id/role/source）⇒ 挂到 cur_turn（最近开
         #   始的轮）。注入（agent-instructions/runtime-context）的 kind != 'user' 不算。
         def _row(t: int) -> dict:

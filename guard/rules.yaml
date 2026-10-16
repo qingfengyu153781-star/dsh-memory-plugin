@@ -198,7 +198,7 @@ rules:
 
   - id: R-27
     rule: 能看图就直接 read_image；不许用像素统计代替看图下语义结论（像素统计只能判色偏）
-    src: "视觉能力提醒（2026-10-03 修正：read_image 已打通，旧表述『看不了图时绕道』已过时）"
+    src: "视觉能力提醒（2026-10-03 修正：read_image 已打通，旧表述『…』已过时）"
     gate: g_behavior
     check: "python _guard/guard_cli.py behavior --text-file <文本>   # B3"
     kind: enforced
@@ -240,14 +240,14 @@ rules:
 
   - id: R-33
     rule: 宣布方案前必须核决策过程（有比选/有判据/判据可复算/不撞已拒绝清单）
-    src: "_guard · g_decision（用户追问『为什么核不了方案好不好』）"
+    src: "_guard · g_decision（用户追问『…』）"
     gate: g_decision
     check: "python _guard/guard_cli.py decision --text-file <方案>"
     kind: enforced
 
   - id: R-34
     rule: 实测值必须指到可查来源（台账/探针/命令/日志），手写的不算实测
-    src: "_guard · g_xcheck X6（用户点名『改了没测也要解决』）"
+    src: "_guard · g_xcheck X6（用户点名『…』）"
     gate: g_xcheck
     check: "python _guard/guard_cli.py xcheck --text-file <报告> --items X6"
     kind: enforced
@@ -268,7 +268,7 @@ rules:
 
   - id: R-37
     rule: 声明"最高优先级"的章节必须排在文件前部（排最后＝必然第一个被截）
-    src: "_guard · g_doc D2（2026-10-03 用户明令「改」）"
+    src: "_guard · g_doc D2（2026-10-03 用户明令「…」）"
     gate: g_doc
     check: "python _guard/guard_cli.py doc"
     kind: enforced
@@ -289,7 +289,7 @@ rules:
 
   - id: R-40
     rule: 跑重活（ASR/大模型/视频生成/长渲染）前先实测可用内存，不够就降档或拒绝开跑
-    src: "_guard · g_mem（2026-10-03 立：两个子智能体在 ASR 中途 OOM 死掉，`mkl_malloc: failed to allocate memory`；文档里那条『15.7GB 是硬墙』此前没有闸在跑）"
+    src: "_guard · g_mem（2026-10-03 立：两个子智能体在 ASR 中途 OOM 死掉，`mkl_malloc: failed to allocate memory`；文档里那条『…』此前没有闸在跑）"
     gate: g_mem
     check: "python _guard/gates/g_mem.py            # 报本机内存 + 三档是否够
 python _guard/gates/g_mem.py --tier asr   # 单判某档（asr/heavy/light）
@@ -298,7 +298,7 @@ python _guard/gates/g_mem.py --text-file <报告>  # 判报告里提到的重活
 
   - id: R-41
     rule: 报机位/构图结论必须同时给「焦距(mm)＋距离(m)＋主体尺寸或视场(m)」三要素；三缺一即视为“机位是猜的”，结论作废。禁止“先给个机位试试看”、禁止用镜头数反推距离、禁止拿“图不好看”否定几何
-    src: "用户 2026-10-04 点名『你以前看建模的图片的时候是不是从来没有考虑过镜头焦距和距离？』；当日实测病根：报机位凭感觉（站 y=-90 / 50mm 看山），连带①相机贴山面/满屏主体 ②拿图不好看否定几何（山被否定十几轮，真因只是镜头太近）③同一机位反复试 6 次全失败"
+    src: "用户 2026-10-04 点名『…』；当日实测病根：报机位凭感觉（站 y=-90 / 50mm 看山），连带①相机贴山面/满屏主体 ②拿图不好看否定几何（山被否定十几轮，真因只是镜头太近）③同一机位反复试 6 次全失败"
     gate: g_vision
     check: "python _guard/gates/g_vision.py --text-file <报告>   # 缺『焦距/距离/主体尺寸』任一项即拦
 # 反例（该拦）：『机位定在 y=-90、镜头 50mm』 → 机位是猜的
@@ -309,15 +309,15 @@ python _guard/gates/g_mem.py --text-file <报告>  # 判报告里提到的重活
   # ══════════════════════════════════════════════════════════════════════
   # ★ 2026-10-04 新增：**要求类**规矩（此前 41 条全是"做法类"，要求类 = 0 条）
   #
-  # 用户点破：「建模的问题固化进知识库，为什么我的要求后面还是会跑偏？」
+  # 用户点破：「…」
   # 实测：闸 41/41 全接上、编排器 179 次成功，**但 41 条里没有一条管"用户要求有没有被执行"**。
-  # ⇒ 闸能保证「做得对不对」，保证不了「是不是用户要的那件事」。
+  # ⇒ 闸能保证「…」，保证不了「…」。
   # 实证代价：示例项目A会话 142 轮，构件全合规，整座山方向错 ⇒ 42 轮返工后整座山被删。
   # ══════════════════════════════════════════════════════════════════════
 
   - id: R-42
-    rule: 开轮必须把用户原话落成「要求锚」(BRIEF)，收尾时必须逐条对账；凡宣布完成/交付/达标，BRIEF 里不许有「未兑现」项
-    src: "用户 2026-10-04『为什么我的要求后面还是会跑偏』；实证：示例项目A 4 次自宣交付（seq 10185/10353/10483/10582）时，8 条要求里 R1/R6/R8 三条全程未达标，无任何闸拦下"
+    rule: 开轮必须把用户原话落成「…」(BRIEF)，收尾时必须逐条对账；凡宣布完成/交付/达标，BRIEF 里不许有「…」项
+    src: "用户 2026-10-04『…』；实证：示例项目A 4 次自宣交付时，8 条要求里 R1/R6/R8 三条全程未达标，无任何闸拦下"
     gate: g_brief
     check: "python _guard/gates/g_brief.py --init --session <会话.jsonl> --goal \"<goal原文>\" --out BRIEF.md
 python _guard/gates/g_brief.py --text-file <报告> --brief BRIEF.md
@@ -326,17 +326,17 @@ python _guard/gates/g_brief.py --text-file <报告> --brief BRIEF.md
     kind: enforced
 
   - id: R-43
-    rule: 声称「用户选了/用户要求/按你的意思」必须给出处（turn=N / seq=N / 逐字引号），给不出即视为脑补
-    src: "实证：示例项目A seq=1783 写「你选了『白模级』」而无出处（该决定实际在 seq=1780）；同类措辞在会话中反复出现且从不带出处"
+    rule: 声称「…」必须给出处（turn=N / seq=N / 逐字引号），给不出即视为脑补
+    src: "实证：示例项目A  写「…」而无出处；同类措辞在会话中反复出现且从不带出处"
     gate: g_brief
     check: "python _guard/gates/g_brief.py --text-file <报告> [--brief BRIEF.md]
 # 反例（该拦）：『你选了「白模级」，所以我按白模做。』
-# 正例（该放）：『你选了「白模级」（turn=4 / seq=1780），所以我按白模做。』"
+# 正例（该放）：『你选了「白模级」，所以我按白模做。』"
     kind: enforced
 
   - id: R-44
-    rule: 「用户原话」只认 source.kind=='user' 与 ask_user_question 的真实答复；goal/team-message/runtime-context 等注入内容一律不得当用户原话
-    src: "实证：示例项目A会话 663 条 user/message 里只有 35 条是真人原话（其余 628 条是注入）；把注入当原话是『要求被曲解』的第一大来源"
+    rule: 「…」只认 source.kind=='user' 与 ask_user_question 的真实答复；goal/team-message/runtime-context 等注入内容一律不得当用户原话
+    src: "实证：示例项目A会话 663 条 user/message 里只有 35 条是真人原话（其余 628 条是注入）；把注入当原话是『…』的第一大来源"
     gate: g_brief
     check: "python _guard/gates/g_brief.py --init --session <会话.jsonl> --out BRIEF.md
 # 判据：抽出的条数须与 source.kind=='user' 的实际条数一致（示例项目A应为 35 + 4）"
@@ -344,7 +344,7 @@ python _guard/gates/g_brief.py --text-file <报告> --brief BRIEF.md
 
   - id: R-45
     rule: 不理解或有疑问 ⇒ 必须先提问，绝对不开工；提问后未获答复也不许开工。同时禁止滥问——答案已写在剧本/台账/文档里的，先自己查，查不到再问
-    src: "用户 2026-10-04 明令『增加一个闸用于理解用户真正的需求，不理解或者有疑问就使用提问，绝对不开工』；实证代价：示例项目A会话用户要『巍峨嶙峋』，Lead 没问『什么样的算巍峨』就按坡度直方图猜了 20+ 轮，最终 42 轮造山全废、整座山被删（seq 10660/10689）"
+    src: "用户 2026-10-04 明令『…』；实证代价：示例项目A会话用户要『…』，Lead 没问『…』就按坡度直方图猜了 20+ 轮，最终 42 轮造山全废、整座山被删"
     gate: g_ask
     check: "python _guard/gates/g_ask.py --demo                              # 负例自检
 python _guard/gates/g_ask.py --note \"<要做的事>\" [--ask <问题>]...  # 开工前拦
@@ -356,8 +356,8 @@ python _guard/gates/g_ask.py --check-asked --ask \"<问题>\"           # 防滥
     kind: enforced
 
   - id: R-46
-    rule: 验收判据必须量对对象——宣称「通过/达标/残留0」必须同时给出①量的什么量（单位）②扫描范围（查了哪里）③对应用户哪条要求；且同一判据连续 N 轮输出完全相同即判「已钝化」（永远为真的判据不产生信息）
-    src: "用户 2026-10-04『补洞没用要根治』；实证：《联网学习Blender建模》会话 seq=717 的 final_check.py 把用户『别占空间』翻成『有没有 mp4 后缀』，连续 29 轮打印『媒体残留 0 ✅』，而 _tmp_video_learn 实存 907 文件 / 72.2 MB（比知识库本体 28.6MB 还大 2.5 倍）⇒ 15h50m / 3004 万 token 换来用户一句『不合格』"
+    rule: 验收判据必须量对对象——宣称「…」必须同时给出①量的什么量（单位）②扫描范围（查了哪里）③对应用户哪条要求；且同一判据连续 N 轮输出完全相同即判「…」（永远为真的判据不产生信息）
+    src: "用户 2026-10-04『…』；实证：《联网学习Blender建模》会话  的 final_check.py 把用户『…』翻成『…』，连续 29 轮打印『…』，而 _tmp_video_learn 实存 907 文件 / 72.2 MB（比知识库本体 28.6MB 还大 2.5 倍）⇒ 15h50m / 3004 万 token 换来用户一句『…』"
     gate: g_criteria
     check: "python _guard/gates/g_criteria.py --demo                        # 负例自检（用真实那句『媒体残留 0』）
 python _guard/gates/g_criteria.py --text-file <报告>             # 查判据是否声明量纲/范围/要求锚
@@ -371,7 +371,7 @@ python _guard/gates/g_criteria.py --record \"名|判据原文\"          # 记�
 
   - id: R-47
     rule: 批量任务（下载/转写/渲染/导出…）必须以「完成率达标」为出口条件；出现 ok=0、或完成率低于阈值、或日志有中断字样而报告不交代剩余 ⇒ 不许进入下一阶段
-    src: "用户 2026-10-04『补洞没用要根治』；实证：《联网学习Blender建模》会话 seq=1325『DONE ok=0 skip=0 fail=0』（整批零成功）后直接转入写笔记；另 seq=1525/1595/2473 三次『STOP 内存<2.0GB 安全退出』未触发任何红灯"
+    src: "用户 2026-10-04『…』；实证：《联网学习Blender建模》会话 『…』（整批零成功）后直接转入写笔记；另  三次『…』未触发任何红灯"
     gate: g_batch
     check: "python _guard/gates/g_batch.py --demo                          # 负例自检（用真实那次 ok=0）
 python _guard/gates/g_batch.py --log <批次日志>                   # 查完成率/中断
@@ -385,60 +385,60 @@ python _guard/gates/g_batch.py --text-file <报告>                 # 查『声�
 
   - id: R-48
     rule: 自动续跑必须能熔断——同一动作连续失败≥3次 / 判据连续≥5轮雷同 / 连续≥3轮无新产物 / 用户已表达不满未解决 ⇒ 该停下报回来，不许继续自动扩产
-    src: "用户 2026-10-04『补洞没用要根治』；实证：《联网学习Blender建模》会话用户 02:46 说『你这椅子不像现实的』，之后 turn_45~54 仍自动续跑 10 轮 / 2h9m（用户全程不在场），11 轮里 36% 判为原地打转，直到 11:25 用户说『不合格』；护栏层自身同族：action_sequence.jsonl 里 launch@9876 连败 4 次仍重试"
+    src: "用户 2026-10-04『…』；实证：《联网学习Blender建模》会话用户 02:46 说『…』，之后 turn_45~54 仍自动续跑 10 轮 / 2h9m（用户全程不在场），11 轮里 36% 判为原地打转，直到 11:25 用户说『…』；护栏层自身同族：action_sequence.jsonl 里 launch@9876 连败 4 次仍重试"
     gate: g_loop
     check: "python _guard/gates/g_loop.py --demo                           # 负例自检
 python _guard/gates/g_loop.py --actions <action_sequence.jsonl>  # 查同动作连败
 python _guard/gates/g_loop.py --rounds <rounds.jsonl>            # 查无产物轮/钝化轮
 python _guard/gates/g_loop.py --rounds <rounds.jsonl> --user-text <用户话>  # 查用户不满后是否仍在跑
 # 反例（该拦）：launch 同一目标连败 4 次 → 红
-# 反例（该拦）：用户说『你这椅子不像现实的』之后仍继续自动跑 → 红（最重要）
+# 反例（该拦）：用户说『…』之后仍继续自动跑 → 红（最重要）
 # 反例（该拦）：连续 3 轮无任何新产物 → 红
 # 正例（该放）：每轮有新产物、判据数值在变 → 绿
 # 正例（该放）：台账为空 → 未核 → 不拦"
     kind: enforced
 
   # ★ 2026-10-07 新增：运行环境四条（源自「<用户原话已隐去：资源不是限制、去学>」对话
-  #   session-aaaa27fc 的死亡复盘——399 条问题，见
+  #   <会话> 的死亡复盘——399 条问题，见
   #   <WORKSPACE>\_token无限对话通读_20261004\问题清单_全量.md）
   #   该会话死于上游风暴中静默硬撑；同类环境病全程复发 80+ 次。
 
   - id: R-49
     rule: LLM 连败即交接——模型请求连续 3 轮/一整轮重试全灭 ⇒ 立即落盘交接并显式报告用户，不许静默重试到会话死掉；派子智能体连败 2 批（≥4 个中途死零落盘）⇒ 停止再派转本人顺序做
-    src: "AGENTS.md 铁律·运行环境四条 第 1 条；实证：session-aaaa27fc 最后三轮（Turn56/57/58）各 5/5 重试全灭、最后一条记录 Connection error 零交代而死（seq 9256–9324）；2026-10-07 凌晨 4 个回访子智能体全部中途死零落盘（本会话实测）"
+    src: "AGENTS.md 铁律·运行环境四条 第 1 条；实证：<会话> 最后三轮（Turn56/57/58）各 5/5 重试全灭、最后一条记录 Connection error 零交代而死；2026-10-07 凌晨 4 个回访子智能体全部中途死零落盘（本会话实测）"
     gate: g_loop
-    check: "python _guard/gates/g_loop.py --demo   # 连败≥3 熔断已在 g_loop 闸内跑（同动作连败/无产物轮/用户不满后仍跑；R-49 把适用面明确到『LLM 上游风暴/子智能体批量死亡』场景）"
+    check: "python _guard/gates/g_loop.py --demo   # 连败≥3 熔断已在 g_loop 闸内跑（同动作连败/无产物轮/用户不满后仍跑；R-49 把适用面明确到『…』场景）"
     kind: enforced
 
   - id: R-50
     rule: 关键验收落盘后读——凡验收/计数/死链/残留类结论必须命令输出重定向到文件再 read 回读，不许直接采信 bash 回显（并发会话共用输出通道会塞入无关内容）
-    src: "AGENTS.md 铁律·运行环境四条 第 2 条；实证：session-aaaa27fc 全程终端污染 80+ 次——ls|wc -l 报 167 实际 19（seq 2351）、T18 验收 exit 0 交回 0 字节数字全丢（seq 4005）、据被污染输出宣布零死链未复核（seq 4504）"
+    src: "AGENTS.md 铁律·运行环境四条 第 2 条；实证：<会话> 全程终端污染 80+ 次——ls|wc -l 报 167 实际 19、T18 验收 exit 0 交回 0 字节数字全丢、据被污染输出宣布零死链未复核"
     gate: g_probe
     check: "python _guard/gates/g_probe.py --demo   # 判据闸『对照自证』已跑；R-50 明确验收类结论的证据必须来自落盘文件而非终端回显"
     kind: enforced
 
   - id: R-51
     rule: python 输出一律重定向到文件再 read；脚本含中文/emoji 时前置 PYTHONIOENCODING=utf-8（GBK 控制台会炸 UnicodeEncodeError / 变 mojibake）
-    src: "AGENTS.md 铁律·运行环境四条 第 3 条；实证：✨emoji 崩 _getcid.py（seq 9225）、read GBK 日志报 FS_NOT_TEXT（seq 3176/6593）、中文回显全程 mojibake（贯穿 23 段）；2026-10-07 本会话诊断脚本被 ⏎ 字符当场炸过一次"
+    src: "AGENTS.md 铁律·运行环境四条 第 3 条；实证：✨emoji 崩 _getcid.py、read GBK 日志报 FS_NOT_TEXT、中文回显全程 mojibake（贯穿 23 段）；2026-10-07 本会话诊断脚本被 ⏎ 字符当场炸过一次"
     gate: g_path
     check: "python _guard/gates/g_path.py --demo   # 路径/命令写法闸已跑；R-51 补『编码前置+重定向』写法判据"
     kind: enforced
 
   - id: R-52
     rule: 同一文件禁止 bash/python 与 edit 混写；bash 或 python 写过的文件 edit 前必须重新 read（否则 FS_STALE_VERSION / FS_NOT_OBSERVED 连拦）
-    src: "AGENTS.md 铁律·运行环境四条 第 4 条；实证：FS_STALE_VERSION 三连拦（seq 5508/5518/5564）、FS_NOT_OBSERVED 同文件 20 分钟内二犯（seq 3298→3561，教训没吸收）"
+    src: "AGENTS.md 铁律·运行环境四条 第 4 条；实证：FS_STALE_VERSION 三连拦、FS_NOT_OBSERVED 同文件 20 分钟内二犯"
     gate: g_obj
     check: "python _guard/gates/g_obj.py --demo   # 对象闸『改前先确认状态』已跑；R-52 明确混写场景必须重读后再 edit"
     kind: enforced
 
   # ★ 2026-10-07 新增（源自《去寻找有名的剧本、小说进行》会话全量复盘——
-  #   session-bbbb6d38，518 条问题，_book_audit/REPORT_拆书学习会话复盘_三件套.md，
-  #   主线 B/G + 病根 3「用户闸门被静默改判」；用户 2026-10-07 点破『这样不能根治』
+  #   <会话>，518 条问题，_book_audit/REPORT_拆书学习会话复盘_三件套.md，
+  #   主线 B/G + 病根 3「…」；用户 2026-10-07 点破『…』
   #   ⇒ 硬令从纪律层升到机器台账+物理拦截层）
 
   - id: R-53
-    rule: 用户硬令台账——凡 mutable=false 的用户明令（全集完整性/拆完即删/极度深/拆一点下一点/六部轮转/男频女频各一/无限子智能体/收尾冻结增量），任何派活书、删除决定、换作品、达标宣布不得内部改判；改判文本必须过 g_constraints（冲突即拦），带『经用户确认(seq=...)』豁免标记才放行；开工卡/跟踪表必须引用全部硬令 id（漏引即拦——治"硬令从跟踪表消失"）
-    src: "拆书复盘实证：三条硬约束全部在深夜/无人值守期被内部改判（『5话够用/剧场版主动不收/已批准只下重点话数/改用盗墓笔记』）只留内部痕迹不上报，用户被迫 9 次暴怒纠偏；该会话自立 20+ 节规范仍撞红线 4 次——文档层不根治"
+    rule: 用户硬令台账——凡 mutable=false 的用户明令（全集完整性/拆完即删/极度深/拆一点下一点/六部轮转/男频女频各一/无限子智能体/收尾冻结增量），任何派活书、删除决定、换作品、达标宣布不得内部改判；改判文本必须过 g_constraints（冲突即拦），带『…』豁免标记才放行；开工卡/跟踪表必须引用全部硬令 id（漏引即拦——治"硬令从跟踪表消失"）
+    src: "拆书复盘实证：三条硬约束全部在深夜/无人值守期被内部改判（『…』）只留内部痕迹不上报，用户被迫 9 次暴怒纠偏；该会话自立 20+ 节规范仍撞红线 4 次——文档层不根治"
     gate: g_constraints
     check: "python _guard/gates/g_constraints.py --demo   # 2026-10-07 demo 全绿：复盘 7 个真实改判句全部拦、豁免例不误拦；台账 gates/constraints.json（C-01..C-08 各带 seq 出处）"
     kind: enforced
@@ -452,7 +452,7 @@ python _guard/gates/g_loop.py --rounds <rounds.jsonl> --user-text <用户话>  #
 
   - id: R-54
     rule: 静默宽 except 只防新增——我们代码里的静默宽 except（`except Exception`/裸 except 且 handler 体内无 warn/log/print/raise/audit/error）必须**可数**，存量登记进基线，**新增即红**；扫描面里出现解析失败文件同样判红（fail-closed，不许"文件坏了所以审计不到"）
-    src: "2026-10-14 立。审计核移植自 lingshu（FuRongJun-1999）tools/silent_except_lint.py（MIT，原样未改）；对应 AGENTS.md 的『静默失效』条与『闸门化防复发』。实测首建读数：_guard 29 文件/71 处、dsh-rag-memory 2 文件/13 处"
+    src: "2026-10-14 立。审计核移植自 lingshu（FuRongJun-1999）tools/silent_except_lint.py（MIT，原样未改）；对应 AGENTS.md 的『…』条与『…』。实测首建读数：_guard 29 文件/71 处、dsh-rag-memory 2 文件/13 处"
     gate: g_silent
     check: "自动路：hook.py 的 guard_silent() 在 Hook.after 收尾调用（同进程节流，只真扫一次）；手敲：python _guard/guard_cli.py silent（绿=无新增）；负例自检：silent --demo（4 例）；改基线用 _guard/tools/silent_except_lint.py --update-baseline"
     kind: enforced
@@ -464,7 +464,7 @@ python _guard/gates/g_loop.py --rounds <rounds.jsonl> --user-text <用户话>  #
 
   - id: R-55
     rule: 对外面卫生——任何**对外面**（要推 GitHub 的 / 要交付给外部方的 / 要引入固化进本仓的外部件）定稿前必须过卫生扫描：凭据 · 本机绝对路径字面量 · PII 命中即红；要放过只能在同行写 `hygiene-allow: <理由>`。**未登记任何对外面时判红**（"没扫"≠"没问题"）
-    src: "2026-10-15 立，学自 lingshu（FuRongJun-1999）docs/architecture.md §6『四不』（记忆数据/凭据/私有模块永不入仓；文档不写本机绝对路径字面量）与其 docs/intake/*/AUDIT.md 的『双清单』（内容政策 + 隐私）。它的双清单扫描是**人肉的**，本闸把它机器化；独立复核：lingshu 全仓 385 文件 0 命中（其 CLEAN 声明成立）"
+    src: "2026-10-15 立，学自 lingshu（FuRongJun-1999）docs/architecture.md §6『…』（记忆数据/凭据/私有模块永不入仓；文档不写本机绝对路径字面量）与其 docs/intake/*/AUDIT.md 的『…』（内容政策 + 隐私）。它的双清单扫描是**人肉的**，本闸把它机器化；独立复核：lingshu 全仓 385 文件 0 命中（其 CLEAN 声明成立）"
     gate: g_public
     check: "python _guard/guard_cli.py public（省略路径=扫 tools/public_faces.txt 登记面）；临时扫：public --paths <p1,p2>；负例自检：public --demo（5 例，含『报告不得原文泄露凭据』『未登记不绿』）"
     kind: detected
@@ -482,7 +482,7 @@ python _guard/gates/g_loop.py --rounds <rounds.jsonl> --user-text <用户话>  #
 
   - id: R-57
     rule: 闸挂载完整性——`_guard/gates/` 的每一道闸（`g_*.py`）必须 ①登记进 `guard_cli.GATE_FILES`（否则 CLI 跑不到它）②列进 `cmd_selftest` 清单（否则 `selftest` **永远不跑它**）③登记项指向的文件存在。判据从 `guard_cli.py` **源码 AST 解析**得出，**不写死名单**（写死＝第二份真相源，清单变了闸不知道）
-    src: "2026-10-15 立，学自 lingshu `.github/workflows/gate.yml` 的 SCRIPT_TESTS 纪律——它自认『脚本式件不列入 SCRIPT_TESTS，则门禁根本看不见它；同族盲区已出现三次（#69/#26/#145）』。我们的实证：首测 `gates/` 有 **27** 道闸而 `GATE_FILES` 只登记 **22** 个（缺 batch/constraints/criteria/del/loop），`selftest` 又少一个 vault ⇒ **selftest 实覆盖 21/27**；★其中 `g_del` 的 `--demo` 当时**就是红的**（漏拦『先删后补矛盾』句式）——闸坏了＋不在清单＝**双盲，无人知**"
+    src: "2026-10-15 立，学自 lingshu `.github/workflows/gate.yml` 的 SCRIPT_TESTS 纪律——它自认『…』。我们的实证：首测 `gates/` 有 **27** 道闸而 `GATE_FILES` 只登记 **22** 个（缺 batch/constraints/criteria/del/loop），`selftest` 又少一个 vault ⇒ **selftest 实覆盖 21/27**；★其中 `g_del` 的 `--demo` 当时**就是红的**（漏拦『…』句式）——闸坏了＋不在清单＝**双盲，无人知**"
     gate: g_mount
     check: "自动路：hook.py 的 guard_mount() 在 Hook.after 收尾调用（极轻、不节流）；手敲：python _guard/guard_cli.py mount（绿=闸文件/GATE_FILES/selftest 三者一致）；负例自检：mount --demo（4 例）"
     kind: enforced
@@ -491,16 +491,16 @@ python _guard/gates/g_loop.py --rounds <rounds.jsonl> --user-text <用户话>  #
 
   - id: R-58
     rule: 记忆库管道卫生——**非真人来源**的消息（`source.kind` = `plugin:*` / `time-context` / `runtime-context` / `agent-instructions` / `tool-jobs`）**不得**被记忆库登记成"用户原话"（`kind='user_text'`）。判据走 **fail-closed 白名单**：只有 `kind=='user'` 才算真人；其余一律存成 `plugin_injection` 且列入 `pipeline.NO_CHUNK`——**存得下、可审计、但进不了 chunks、检索不到**（挡而不丢）
-    src: "2026-10-15 立。实证（同一把尺子，清洗前 vs 清洗后）：`kind='user_text'` 且文本以注入标签开头的原子 **3704 条**（`<memory_recall` 2687 / `<attention_orchestration` 326 / 运行环境快照 3137 / 时间上下文 2620），`chunks.user_text` 含注入标签 **83464** 个；真人 `user_text` 从 24360 → **6933（29%）** —— 也就是说索引里当时有 71% 的「用户原话」不是用户。病根：`src/memlib/dsh.py` 的 `user/message` 分支只看记录类型、**不看 `data.source.kind`**，而原始记录里本来就带 `{\"kind\":\"plugin:dsh-memory-plugin\"}` 标记。后果：注入块里写着用户这一轮的逐字 query ⇒ 召回时稳定排前 ⇒ **编排器把上一轮自己的输出当证据再注入**（台账里 18.6% 的『出处』就是这么来的，甚至填的是上一次的注入块本身）"
+    src: "2026-10-15 立。实证（同一把尺子，清洗前 vs 清洗后）：`kind='user_text'` 且文本以注入标签开头的原子 **3704 条**（`<memory_recall` 2687 / `<attention_orchestration` 326 / 运行环境快照 3137 / 时间上下文 2620），`chunks.user_text` 含注入标签 **83464** 个；真人 `user_text` 从 24360 → **6933（29%）** —— 也就是说索引里当时有 71% 的「…」不是用户。病根：`src/memlib/dsh.py` 的 `user/message` 分支只看记录类型、**不看 `data.source.kind`**，而原始记录里本来就带 `{\"kind\":\"plugin:dsh-memory-plugin\"}` 标记。后果：注入块里写着用户这一轮的逐字 query ⇒ 召回时稳定排前 ⇒ **编排器把上一轮自己的输出当证据再注入**（台账里 18.6% 的『…』就是这么来的，甚至填的是上一次的注入块本身）"
     gate: g_mem_hygiene
     check: "自动路：hook.py 的 guard_mem_hygiene() 在 Hook.after 收尾调用（H1–H5 毫秒级：白名单存在 / plugin_injection 在 NO_CHUNK / 三条 fixture 真跑抽取器 / 切片泄漏=0）；手敲：python _guard/guard_cli.py mem-hygiene（绿=行为判据全过）；加现库兜底：mem-hygiene --db（H6 现库 user_text 注入块==0、H7 plugin_injection>0 挡而不丢；全表 LIKE 扫，数秒）；负例自检：mem-hygiene --demo（先跑真实形态，再把白名单放开 / 把 plugin_injection 从 NO_CHUNK 拿掉，两次都必须当场红）"
     kind: enforced
 
-  # ★ 2026-10-15 新增（用户明令「保证以后不会出现假报错、假根治、假通过」）
+  # ★ 2026-10-15 新增（用户明令「…」）
 
   - id: R-59
     rule: 对抗样本电池——支持文本输入的闸，必须各配一对样本：**must_block**（打扮得体但违规）必须判红**且**判据必须"到达"（输出里出现该判据的标记），**must_pass**（正规产出）必须判绿。三类病分别对应：判红不了＝**假通过**；判红但判据没到达（整段跳过）＝**假根治**（按措辞逃逸）；误拦合规样本＝**假报错**。不吃文本输入的闸必须登记在 `adversarial_battery.DEMO_ONLY` 并写明原因（**不许"没样本＝通过"**），由 `--demo` 覆盖
-    src: "2026-10-15 立。实证（当天审计一次抓出 7 处，全是'按措辞触发'）：`g_vision`「我看过那张图了」→ 报'无图像结论，跳过'、exit 0；`g_decision`「打算用 B 方案…最终就按 B 走」→ '无方案决策声明，跳过'、exit 0；`g_xcheck`/`g_root` 写「已**根治**」→ 台账核查与根因判据**双双不跑**；`g_behavior` R-27 只认『像素统计』不认『像素均值/整镜 mean』；`g_ask` 只认『按我的理解』不认『按自己的理解』。另：本闸自己曾被电池当普通闸去跑 ⇒ **无限递归**（已修自指）"
+    src: "2026-10-15 立。实证（当天审计一次抓出 7 处，全是'按措辞触发'）：`g_vision`「…」→ 报'无图像结论，跳过'、exit 0；`g_decision`「…」→ '无方案决策声明，跳过'、exit 0；`g_xcheck`/`g_root` 写「…」→ 台账核查与根因判据**双双不跑**；`g_behavior` R-27 只认『…』不认『…』；`g_ask` 只认『…』不认『…』。另：本闸自己曾被电池当普通闸去跑 ⇒ **无限递归**（已修自指）"
     gate: g_adv
     check: "自动路：hook.py 的 guard_adv_changed() 在 Hook.after 里，**只对本次改动到的闸文件**重跑样本对（没改到闸 ⇒ 零开销直接返回）；手敲：python _guard/guard_cli.py adv（全量电池）｜adv --changed gates/g_vision.py（只跑改到的）｜adv --demo（自检：覆盖面 + **坏样本自证** + 真样本全跑）；样本与期望：tools/adversarial/<闸>/{must_block.md,must_pass.md,expect.json}"
     kind: enforced
@@ -527,7 +527,7 @@ python _guard/gates/g_loop.py --rounds <rounds.jsonl> --user-text <用户话>  #
 
   - id: R-62
     rule: 边界声明——报告里一旦出现**完成类断言**（已根治/已修复/已改完/处理完毕/零残留/彻底解决…），就必须有一栏写清**这次没修什么**（栏目名：边界/遗留与风险/本次未修/已知缺口…；栏内要有「未修：/遗留：/未做：/未扫：/盲区：/缺口：」**其一**即可——6 个是**同义别名**，由 `fields_mode: any` 实现，不是"全都要"）。只报修好的、不报没修的 = **谎报完整**
-    src: "2026-10-15 立，学自 lingshu `core.py` 的修复注释体例——#176/#205/#257/#263 每处都带一段『**边界（削掉的判别力，如实标注）**』，写明这次没解决什么、代价是什么（如 #176 明写『副本合一未做』『now=None 时不做时间记账』）；其设计稿亦明写『缺口与待裁事项单列，不谎报完整』。★ 同日修了两处**假报错**：`find_section` 只取第一个同义栏（§1.5 诚实边界 vs §边界 并存时合格那栏从没被看过）；`fields` 一律按 all-of 判（把『其一』实现成『全都要』⇒ 只写『未修：』的合格报告被判缺 5 个字段）。同族还把 S2（实测于/取数时刻/截至）也改为 any-of"
+    src: "2026-10-15 立，学自 lingshu `core.py` 的修复注释体例——#176/#205/#257/#263 每处都带一段『…』，写明这次没解决什么、代价是什么（如 #176 明写『…』『…』）；其设计稿亦明写『…』。★ 同日修了两处**假报错**：`find_section` 只取第一个同义栏（§1.5 诚实边界 vs §边界 并存时合格那栏从没被看过）；`fields` 一律按 all-of 判（把『…』实现成『…』⇒ 只写『…』的合格报告被判缺 5 个字段）。同族还把 S2（实测于/取数时刻/截至）也改为 any-of"
     gate: g_struct
     check: "自动路：hook.py 的报告闸（写报告时拦）；手敲：python _guard/gates/g_struct.py --text-file <报告>；负例自检：guard_cli.py selftest 里的 struct --demo；样本对：tools/adversarial/struct/{must_block,must_pass}.md（must_pass 已按 R-62 补『未修：/边界：』两行）；改闸后按 R-59 重跑该闸样本对"
     kind: enforced
@@ -540,21 +540,21 @@ python _guard/gates/g_loop.py --rounds <rounds.jsonl> --user-text <用户话>  #
 
   - id: R-68
     rule: 核验器**不得与被检对象同源**——判据件不得 import 被检对象模块；**必须有自证入口**（--demo/--selftest）；声明了被检产物却只有它一个依据 ⇒ 记**未验**
-    src: "2026-10-16 立。学自 dsh-bounty 的账本自审件思路（该仓明写『本文件不 import bounty_board，id 公式独立重实现 —— 当独立见证者，避免同错同绿』；该仓 license=None，故本闸为自研实现）。本仓同源风险：g_prov 读 memlib 写的库、g_integ 跑被检对象自己的测试 ⇒ 同源判据给不出独立证据"
+    src: "2026-10-16 立。学自 dsh-bounty 的账本自审件思路（该仓明写『…』；该仓 license=None，故本闸为自研实现）。本仓同源风险：g_prov 读 memlib 写的库、g_integ 跑被检对象自己的测试 ⇒ 同源判据给不出独立证据"
     gate: g_witness
     check: "手敲：guard_cli.py witness（读 tools/witness.json）；负例自检：witness --selftest（同源必红 / 无自证入口必红 / 独立+自证才绿 / 声明被检产物记未验）；自动路：hook.guard_witness"
     kind: enforced
 
   - id: R-69
     rule: **跑完不许把仓搞脏**——声明的每个 git 仓，生成器/闸/探针跑完后 `git status --porcelain` 必须为空（允许清单须**显式声明**）；不是 git 仓 / git 不可用 ⇒ **未验**（不许当干净）
-    src: "2026-10-16 立。学自 dsh-bounty 的 CI（review-check.yml『跑完不许把仓搞脏』；该仓 license=None，故本闸为自研实现）。本机复跑实测：该仓跑完全部生成器后 git status --porcelain 为空 ✓；本仓风险：_guard 频繁写台账/快照/备份，一旦写到受版本管理的文件上，没有任何判据会报"
+    src: "2026-10-16 立。学自 dsh-bounty 的 CI（review-check.yml『…』；该仓 license=None，故本闸为自研实现）。本机复跑实测：该仓跑完全部生成器后 git status --porcelain 为空 ✓；本仓风险：_guard 频繁写台账/快照/备份，一旦写到受版本管理的文件上，没有任何判据会报"
     gate: g_clean
     check: "手敲：guard_cli.py clean（读 tools/clean.json）；负例自检：clean --selftest（造一条未提交必红 / 白名单放行 / 非 git 记未验）；自动路：hook.guard_clean"
     kind: enforced
 
   - id: R-67
     rule: **覆盖 ≠ 蕴含**——凡以"关键词/要点出现过"为依据声称"语义存活 / 结论成立"，必须附**极性/否定核对**；声明与引文极性相反 ⇒ 红；**两侧都没提到 ⇒ 未验（不等于通过）**
-    src: "2026-10-16 立，来源 hive-memory-bench（符荣峻）自曝口径：『L2′ 关键词覆盖只量术语出现过没有——对极性/否定/语序不敏感（把「必须」改成「不必」不会压低它），**它不是蕴含/正确性检查**；原名「语义存活」已弃用』。本仓同族风险：采分点覆盖、术语核对都可能被当成"结论成立"；而本工作区最重扣分面恰是"把未验写成已验""
+    src: "2026-10-16 立，来源 hive-memory-bench（符荣峻）自曝口径：『…』。本仓同族风险：采分点覆盖、术语核对都可能被当成"结论成立"；而本工作区最重扣分面恰是"把未验写成已验""
     gate: g_polarity
     check: "手敲：guard_cli.py polarity --claim '…' --quotes quotes.json（quotes.json 可写 {\"quotes\":[…],\"coverage_only\":true} 表示依据只有覆盖）；负例自检：polarity --selftest（极性反转必红 / **纯关键词覆盖必红** / 两侧都没提=未验 / 极性一致才绿）；自动路：hook.guard_polarity（配置驱动，未配则显式写「判据未跑，非通过」）"
     kind: enforced
@@ -568,14 +568,14 @@ python _guard/gates/g_loop.py --rounds <rounds.jsonl> --user-text <用户话>  #
 
   - id: R-65
     rule: 检索/摘要**不得只剩支持自己的那半**——凡"支持与反证同时存在"的判断，必须报**两侧存活率**；**对面那一侧**（与题面词面不重叠的一方）存活率显著低于己方 ⇒ 判红；**一对都没验上**同样是红（"没验"≠"无偏差"）
-    src: "2026-10-16 立，来源 hive-memory-bench（符荣峻，CC BY 4.0 / 代码 MIT）结论三：『压缩丢的不是随机信息，是「对面那一块」』——抽样按与提问的相似度选段，而矛盾的另一侧恰与提问词面不重叠 ⇒ 系统性丢掉；且该机制被独立复现两次（一次由压缩触发、一次由更聚焦的检索触发）。**本仓自己的实例**：2026-10-15 我断言『删除=去重、内容没丢』，实测 371 条无副本 ⇒ 对面那一块当时根本不在我的检索里；同族错误还有『拿关键词覆盖冒充语义存活』（该文自述 L2′ 对极性/否定不敏感）"
+    src: "2026-10-16 立，来源 hive-memory-bench（符荣峻，CC BY 4.0 / 代码 MIT）结论三：『…』——抽样按与提问的相似度选段，而矛盾的另一侧恰与提问词面不重叠 ⇒ 系统性丢掉；且该机制被独立复现两次（一次由压缩触发、一次由更聚焦的检索触发）。**本仓自己的实例**：2026-10-15 我断言『…』，实测 371 条无副本 ⇒ 对面那一块当时根本不在我的检索里；同族错误还有『…』（该文自述 L2′ 对极性/否定不敏感）"
     gate: g_directional
     check: "手敲：guard_cli.py directional --pairs pairs.json --retrieval 片段目录 [--tol 0.2]；负例自检：directional --selftest（只保 a 侧必红 / 两侧都不在必红 / b 侧改写冒充必红 / 两侧都在才绿）——★ 该自检首次运行时**抓出本闸自己的假通过**（两侧都不在曾判绿），已修"
     kind: enforced
 
   - id: R-64
     rule: 集成回归必须**自动跑**——改动**命中声明的面** ⇒ 必须真跑该项目的集成回归；**未命中要显式写「未跑」**（"没跑"≠"通过"）；跑不动/超时/配置坏 ⇒ 一律**判红**
-    src: "2026-10-16 立。实测起因：2026-10-15 把灵枢脑**融合**进 `dsh-memory-plugin` 后，我写了端到端回归 `test/brain_fusion.mjs`（10 条：融合接上没？块是不是一个？验证态有没有被四态资格冒充？脑不可用时有没有写明原因？），**手敲跑通就收工**；次日复核 `package.json` 才发现 `test` 脚本是 `selfcheck && inject && orch_regress` —— **唯独没有它** ⇒ 下次靠人记得跑，忘了等于没有。这与本工作区反复栽过的形态**同源**：「规矩写下了 ≠ 有东西在跑它」。另附当日自证：搭这道闸的过程中我又用 bash heredoc 把换行写成真换行、当场把 `hook.py` 写坏（同日第 3 次），被 `g_syntax`(R-63) 当场拦下"
+    src: "2026-10-16 立。实测起因：2026-10-15 把灵枢脑**融合**进 `dsh-memory-plugin` 后，我写了端到端回归 `test/brain_fusion.mjs`（10 条：融合接上没？块是不是一个？验证态有没有被四态资格冒充？脑不可用时有没有写明原因？），**手敲跑通就收工**；次日复核 `package.json` 才发现 `test` 脚本是 `selfcheck && inject && orch_regress` —— **唯独没有它** ⇒ 下次靠人记得跑，忘了等于没有。这与本工作区反复栽过的形态**同源**：「…」。另附当日自证：搭这道闸的过程中我又用 bash heredoc 把换行写成真换行、当场把 `hook.py` 写坏（同日第 3 次），被 `g_syntax`(R-63) 当场拦下"
     gate: g_integ
     check: "自动路：hook.py 的 guard_integ() 在 Hook.after 里按**本次改动的文件**比对 `tools/integrations.json` 声明的面（命中才跑，不命中写明未跑）；手敲：guard_cli.py integ --changed 'plugin-src/dsh-memory-plugin/lib/index.js' ｜ integ --all ｜ integ --json；负例自检：integ --demo（坏命令必红 / 超时必红 / 配置坏必红 / 未命中必须写明「未跑」）"
     kind: enforced

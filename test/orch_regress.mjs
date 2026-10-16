@@ -179,7 +179,7 @@ check('llmOf 拒绝"有名字但没 stream"的伪服务',
 check('失败诊断串带上"看到了什么"', /ctx\.llm=/.test(llmDiag({})), llmDiag({}))
 
 console.log('\n【J 跳过也要留痕（第五轮：可见性）】')
-// 起因：用户说「已经重启」（4 字 < 门槛 6）+ 无 goal ⇒ 有意跳过召回，但台账一片空白
+// 起因：用户说「…」（4 字 < 门槛 6）+ 无 goal ⇒ 有意跳过召回，但台账一片空白
 // ⇒ "有意跳过"与"插件根本没跑"分不出来。修法：跳过写 `outcome:'skipped'` 进同一本台账。
 {
   const { logSkip } = host
@@ -208,7 +208,7 @@ console.log('\n【J 跳过也要留痕（第五轮：可见性）】')
 }
 
 console.log('\n【K 判官要拿到判据、陈述轮不回顾（第六轮）】')
-// 实证（活注入块）：用户说「我已经重启了，」⇒ 检索按逐字相同命中 10-04 会话里同一句话的
+// 实证（活注入块）：用户说「…」⇒ 检索按逐字相同命中 10-04 会话里同一句话的
 // **元记录**（"助手观察到注入块已生效""没有出现 goal-anchor 块"…），被挑成【必须常驻的事实】。
 const { isAckOnly, looksLikeRequest, buildRequest, ageText: ageT } = core
 check('isAckOnly：报告已完成状态 ⇒ 真', isAckOnly('我已经重启了，') === true, '我已经重启了，')
@@ -222,11 +222,11 @@ check('looksLikeRequest：纯状态 ⇒ 假', looksLikeRequest('我已经重启�
 // 判官输入必须包含"能判相关性/时效"的事实（否则它只能按字面相似度猜）
 const reqText = buildRequest({
   cfg: { persistMax: 4, quoteMax: 4 }, userText: '我已经重启了，', recentTurns: [],
-  forceSignal: false, sessionKey: 'session-45a2f49f-xxxx',
+  forceSignal: false, sessionKey: '<会话>-xxxx',
   candidates: [{ text: '打桩候选', cite: 'dsh:session-cccc#turn=12', timeStart: Date.now() - 11 * 86400000 }],
 })
 check('判官输入含"本轮环境"', reqText.includes('## 本轮环境'), '')
-check('判官输入含当前会话（可辨"这是别的会话的记录"）', reqText.includes('session-45a2f49f'), '')
+check('判官输入含当前会话（可辨"这是别的会话的记录"）', reqText.includes('<会话>'), '')
 check('判官输入含候选距今时长', reqText.includes('〔距今 11 天前〕'), reqText.split('\n').slice(-7).join(' | '))
 check('判官输入对陈述轮给出明确提示', reqText.includes('报告一个已完成的状态'), '')
 check('判官输入写明"0 条是合法答案"', reqText.includes('0 条是合法答案'), '')

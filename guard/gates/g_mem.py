@@ -211,7 +211,7 @@ class MemGate:
         #
         # ★ 2026-10-04 修（B-2 · 判据量错对象）：原实现把"低于舒适线"只写进 detail，
         #   返回值 `ok` 仍是 **True** ⇒ `check_text()` 汇总成
-        #   「1 项全部够用 ⇒ 放行」。**用户拿到的是"放行"两个字**，
+        #   「…」。**用户拿到的是"放行"两个字**，
         #   而真正该传出去的结论是"**不许用 small，必须降 tiny**"。
         #   实测（before_real_input.txt ③）：本机 3.74 GB 可用时判 asr 档
         #   → ok=True、summary=「放行」，与 AGENTS.md「不够/偏低就降 tiny」相矛盾。

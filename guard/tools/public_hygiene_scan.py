@@ -85,6 +85,11 @@ RULES = [
     ("PATH-WIN", "本机绝对路径（盘符+用户/工作区段，含转义形态）", re.compile(
         r"[A-Za-z]:[\\/]{1,2}(?:Users|agent|deepseekzmd)[\\/]{1,2}", re.I)),
     ("PATH-CYG", "MSYS 盘符路径", re.compile(r"/cygdrive/[a-z]/", re.I)),
+    # ★★ 2026-10-16 补：**指向本机私有记录的指针**也算泄露。
+    #   起因：卫生扫描全绿之后，仓里仍留着本机会话 id 与 DB 序号 —— 它们不含凭据、
+    #   不是路径，却**指向私有记录**。（用户原话那一类无法用正则判，见 README §7。）
+    ("REF-SESSION", "本机会话 id 指针",
+     re.compile(r"\bsession-[0-9a-fA-F]{6,}\b")),
     ("PII-MAIL", "邮箱地址", re.compile(
         r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")),
     ("PII-IP", "内网 IP", re.compile(
@@ -366,6 +371,9 @@ SELFTEST_CASES = [
     ("备份文件（路径级）", "x.py.bak", 'print(1)\n', "RT-BACKUP", True),
     # ★★ 回归例：**项目专有名**（词表由调用方注入，公开仓里不放真名）
     ("别的项目专有名", "k.txt", "本案按 ZZZ_PROJ 的断言执行\n", "PROJ-NAME", False),
+    # ★★ 回归例：**会话 id 指针**（不含凭据也不是路径，却是泄露）
+    #   ★ 用**字符串拼接**写样本，否则本器自己的规则会命中本文件（与凭据夹具同一手法）
+    ("会话 id 指针", "m.txt", "出处：会话 session-" + "eeef4dba 第 3 轮\n", "REF-SESSION", False),
 ]
 
 
