@@ -140,14 +140,33 @@ def cmd_demo() -> int:
     ]
     ok = True
     print("== g_constraints --demo（负例＝复盘真实句）==")
+    # ★★ 2026-10-16：负例必须**只用本机台账里真有的硬令**跑。
+    #   实测（新克隆）：那 7 条是**我们真实复盘的原话**（C-01…C-08），而公开件的中性台账
+    #   只有通用条目 ⇒ 大半负例无从命中 ⇒ 报"有漏拦"（那是**环境未接**，不是闸坏）。
+    #   ⇒ 缺条目的用例记 **未验**（单独计数、不许并进"通过"）；另补两条**通用**负例，
+    #     保证任何机器上"机制本身"都被真测到。
+    cons = load_constraints()
+    ids = {c.get("id") for c in cons}
+    # ★ 本机有真台账（.local）⇒ **严格**：漏了就是真漏，判红；
+    #   只有随仓发布的中性台账 ⇒ 未覆盖的复盘句式记未验（覆盖度问题，不等于闸坏）。
+    has_local = (GATES_DIR / "constraints.local.json").exists()
+    NEG = [("这部分够用，只做部分栏目就交付", "C-01", "示例：把『完整』内部改判成『部分达标』"),
+           ("按我的判断改，先不动它", "C-02", "示例：不先请示就内部改判")] + NEG
+    skipped: list = []
     for text, cid, why in NEG:
-        hits = find_hits(text, load_constraints(), None)
+        if cid not in ids:
+            skipped.append("%s（台账无此条）" % cid)
+            continue
+        hits = find_hits(text, cons, None)
         real = [h for h in hits if not h["exempt_seq"]]
         if real and any(h["id"] == cid for h in real):
             print("  ✓拦 %s ｜『%s』→ 命中 %s" % (cid, text[:34], "、".join(real[0]["matched"][:3])))
-        else:
+        elif has_local:
             print("  ✗漏！%s ｜『%s』当年后果=%s —— 闸没拦住，修失败" % (cid, text[:34], why))
             ok = False
+        else:
+            print("  ⚠ 未验：中性台账未覆盖此句式 ｜『%s』" % text[:34])
+            skipped.append("%s（中性台账未覆盖）" % cid)
     for text, _ in POS:
         hits = find_hits(text, load_constraints(), None)
         real = [h for h in hits if not h["exempt_seq"]]
@@ -158,7 +177,17 @@ def cmd_demo() -> int:
             ok = False
     cov = cmd_require_ids.__doc__ or ""
     print("  （覆盖检测另行 --require-ids 模式）")
-    print("== 结果：%s ==" % ("✅ demo 全绿（复盘那 7 个真实句式已被物理拦住）" if ok else "🔴 有漏拦——不许收工，回炉"))
+    if skipped:
+        print("  ⚠ 未验 %d 条：本机台账里没有这些硬令 ⇒ %s（未验 ≠ 通过）"
+              % (len(skipped), "、".join(sorted(set(skipped)))))
+    print("== 结果：%s ==" % ("✅ demo 全绿（本机台账里的真实句式已被物理拦住）" if ok else "🔴 有漏拦——不许收工，回炉"))
+    # ★ 三态结果行：guard_cli 的汇总按这行单独计"未验"（原来只打 `== 结果 ==`，
+    #   汇总看不见它 ⇒ 出现"静默非零"这种最难查的状态）。
+    if ok and skipped:
+        print("### 自检结果：未验 %d 项（环境未接：本机台账缺 %s）"
+              % (len(skipped), "、".join(sorted({s.split("（")[0] for s in skipped}))))
+        return 0
+    print("### 自检结果：%s" % ("全部通过" if ok else "1 项失败"))
     return 0 if ok else 1
 
 # ── 类式 API（hook.py 自动路实例化用；照 g_ask 的 AskGate 模式）──

@@ -369,8 +369,10 @@ def demo(cfg: ProjectConfig) -> int:
     #   占位符没人展开 ⇒ `Image.save` 抛 OSError: Invalid argument ⇒
     #   演示**崩在最后一步**（自检报失败），而前面的用例都"通过"。
     #   这就是"只占位不展开 = 假根治"的第三种表现：不是漏判，是**根本跑不完**。
-    img = expand_path("<WORKSPACE>/_guard/_vtest.png")
-    img.parent.mkdir(parents=True, exist_ok=True)
+    # ★★ 2026-10-16：改到**系统临时目录** —— 原来写在 `<WORKSPACE>/_guard/`，
+    #   演示会**真的创建那个工作区目录**（污染调用方的盘，还会骗过"工作区是否已接"的探测）。
+    import tempfile as _tf
+    img = Path(_tf.mkdtemp(prefix="gvision_")) / "_vtest.png"
     try:
         from PIL import Image  # type: ignore
         im = Image.new("RGB", (200, 120), (200, 60, 60))
@@ -398,7 +400,7 @@ def demo(cfg: ProjectConfig) -> int:
         if not hit:
             fails += 1
     #   正例（不许误杀）：没提图的普通报告必须照旧跳过
-    rp = vg.check_report("我检查了 3 个文件，引用 <WORKSPACE>\AGENTS.md 第 12 行。")
+    rp = vg.check_report("我检查了 3 个文件，引用 <WORKSPACE>/AGENTS.md 第 12 行。")
     if rp.get("ok") is True:
         print("  ✓ 不误杀：无图像结论的报告照旧跳过")
     else:

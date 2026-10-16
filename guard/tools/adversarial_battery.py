@@ -62,6 +62,27 @@ def _sample_tmp() -> Path:
     return _SAMPLE_TMP
 
 
+def env_missing(sample: Path) -> bool:
+    """样本引用的 `<WORKSPACE>` 路径不存在 ⇒ 属**环境未接**（不是"闸误杀/样本假报错"）。
+
+    实测（2026-10-16）：新克隆里 `xcheck/must_pass.md` 引用工作区的真文件，而新克隆里
+    没有 ⇒ 闸判红 ⇒ 电池报「假报错」。那是**环境缺失**，应记 **未验**（未验 ≠ 通过）。
+    """
+    try:
+        txt = sample.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    if "<WORKSPACE>" not in txt:
+        return False
+    sys.path.insert(0, str(GUARD / "tools"))
+    try:
+        from tool_paths import workspace_root
+        # ★ 判**文件**（真工作区才有 guard_cli.py）；判目录会被"演示顺手创建的 _guard/"骗过
+        return not (workspace_root() / "_guard" / "guard_cli.py").exists()
+    except Exception:                              # noqa: BLE001
+        return False
+
+
 def expand_sample(p: Path) -> Path:
     """把样本里的 `<WORKSPACE>` / `<HOME>` **展开后落临时副本**，再交给闸。
 
@@ -161,10 +182,17 @@ def check_pair(name: str, gate: Path, d: Path | None = None) -> list[dict]:
                              if blocked else "**放行了违规样本（假通过）**"))})
 
     # ② must_pass：必须判绿（抓"假报错/误杀"）
-    rc2, out2 = run_gate(gate, ["--text-file", str(expand_sample(d / "must_pass.md"))])
-    rows.append({"gate": name, "kind": "must_pass", "ok": rc2 == 0, "rc": rc2,
-                 "detail": "合规样本放行" if rc2 == 0 else "**拦下了合规样本（假报错）**："
-                           + out2.strip().splitlines()[-1][:80] if out2.strip() else "**拦下了合规样本（假报错）**"})
+    sp = d / "must_pass.md"
+    rc2, out2 = run_gate(gate, ["--text-file", str(expand_sample(sp))])
+    if rc2 != 0 and env_missing(sp):
+        # 环境未接 ⇒ 未验（**不并入"全过"**，汇总里单独计数；未验 ≠ 通过）
+        rows.append({"gate": name, "kind": "must_pass", "ok": True, "rc": rc2,
+                     "unverified": True,
+                     "detail": "**未验**：样本引用的工作区路径不存在（环境未接）⇒ 无法真跑"})
+    else:
+        rows.append({"gate": name, "kind": "must_pass", "ok": rc2 == 0, "rc": rc2,
+                     "detail": "合规样本放行" if rc2 == 0 else "**拦下了合规样本（假报错）**："
+                               + out2.strip().splitlines()[-1][:80] if out2.strip() else "**拦下了合规样本（假报错）**"})
     return rows
 
 
@@ -249,7 +277,15 @@ def main() -> int:
                 continue
             mark = "✓" if r["ok"] else "✗"
             print(f"  {mark} [{r['kind']:10}] {r['gate']:16} {r['detail']}")
-        print(f"\n结论：{'✅ 全过（无假通过/假根治/假报错/盲区）' if not bad else '❌ %d 项不合格' % len(bad)}")
+        unver = [r for r in rows if r.get("unverified")]
+        if not bad and unver:
+            print(f"\n### 自检结果：未验 {len(unver)} 项（环境未接：样本引用的工作区路径不存在）")
+        elif not bad:
+            print("\n### 自检结果：全部通过")
+        else:
+            print(f"\n### 自检结果：{len(bad)} 项失败")
+        print(f"结论：{'✅ 全过（无假通过/假根治/假报错/盲区）' if not bad else '❌ %d 项不合格' % len(bad)}"
+              + (f"；其中 {len(unver)} 项未验（环境未接，非通过）" if unver else ""))
     return 0 if not bad else 1
 
 

@@ -11,7 +11,7 @@
 
 `_guard` 的价值在于「**任何项目都不改代码就能用**」（`g_mem` 的注释里就写着
 "跨项目：阈值来自 config.mem；本文件不含项目专有内容"）。但这条**没有东西在跑**——
-一旦有人图省事把 `Path(r"<WORKSPACE>\<某项目>")` 写进闸里，通用性当场破，而且**没人会发现**
+一旦有人图省事把 `Path(r"<WORKSPACE><<某项目>")` 写进闸里，通用性当场破，而且**没人会发现**
 （在本机跑永远是对的，换机/换项目才炸）。
 
 实证（本条闸的起因）：**2026-10-14 我自己在 `g_silent.py` 里写死了
@@ -242,8 +242,21 @@ def demo(cfg: ProjectConfig | None = None) -> int:
         f = base / "t.py"
         # ★ 夹具用**运行期拼接**造出项目名/路径 —— 本文件 AST 里不出现完整字面量，
         #   否则"扫描器扫自己"会自命中（那是噪声，不是依赖）。
-        name = "lings" + "hu"
-        proj_path = "D:" + "\\" + "agent" + "\\" + name
+        # ★★ 2026-10-16 根治：样本**必须取自本机真正加载到的清单**。
+        #   原来写死项目名（`lings`+`hu`）——而**公开件的中性清单里故意不含项目名**
+        #   （项目名属私有，词表落 .local）⇒ 换台机器 ④ 恒 0 命中 ⇒ 演示误报"闸坏了"。
+        deny = load_deny()
+        cands = ["D:" + "\\" + "agent" + "\\" + "zz",   # 通用形态（随仓发布的那条）
+                 "/cygdrive/" + "d/zz",   # ★ 拼接写：源码不出现连续形态（否则扫描器自命中）
+                 "lings" + "hu",                        # 本机词表里的项目名（若有）
+                 "acme-core"]
+        tok = next((c for c in cands if any(rx.search(c) for _, rx in deny)), "")
+        if not tok:
+            print("  ⚠ 未验：本机禁止清单为空 ⇒ 负例无从构造（未验 ≠ 通过）")
+            print("\n### 自检结果：未验 1 项（环境未接：禁止清单为空）")
+            return 0
+        name = tok
+        proj_path = tok
 
         # ① 代码里写死具体项目路径 ⇒ 必须红
         f.write_text('P = r"%s\\tools"\n' % proj_path, encoding="utf-8")
@@ -265,7 +278,7 @@ def demo(cfg: ProjectConfig | None = None) -> int:
         ok &= len(h3) == 0
 
         # ④ 代码里字符串写项目名 / 动态 import ⇒ 必须红
-        f.write_text('import importlib\nimportlib.import_module("%s.core")\n' % name,
+        f.write_text('import importlib\nimportlib.import_module(r"%s.core")\n' % name,
                      encoding="utf-8")
         h4 = scan_file(f)
         print("  ④ 代码里字符串写项目名    -> 命中 %d（应 ≥1）" % len(h4))

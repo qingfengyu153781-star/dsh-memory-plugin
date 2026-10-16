@@ -160,6 +160,8 @@ def cmd_status(a) -> int:
 def cmd_selftest(a) -> int:
     """跑全部闸门的负例自检：把'以前会犯的错'喂进去，看闸门当场红。"""
     rc_total = 0
+    ran = 0
+    unverified: list = []
     for name in ("spec", "obj", "probe", "done", "lang", "cap", "root", "intent", "path", "struct", "xcheck", "vision", "decision", "doc", "behavior", "mem", "brief", "ask", "silent", "public", "purity", "vault", "batch", "constraints", "criteria", "del", "loop", "mount", "mem_hygiene", "adv", "prov", "selfwrite", "syntax", "integ", "directional", "polarity", "witness", "clean"):
         print("\n" + "█" * 74)
         print(f"█ 闸门自检：{name}")
@@ -170,10 +172,25 @@ def cmd_selftest(a) -> int:
         if a.project_root:
             args += ["--project-root", a.project_root]
         r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace")
-        print(r.stdout or r.stderr)
+        out = r.stdout or r.stderr
+        print(out)
         rc_total |= r.returncode
+        ran += 1
+        # ★ 三态口径（2026-10-16）：本机集成闸在**环境未接**时输出「未验」。
+        #   **未验 ≠ 通过** ⇒ 必须在汇总里单独计数、不许并进"全过"。
+        if "自检结果：未验" in out:
+            reason = next((ln.strip() for ln in out.splitlines() if "自检结果：未验" in ln), "")
+            unverified.append("%s：%s" % (name, reason))
     print("\n" + "=" * 74)
-    print(f"闸门自检汇总：{'全部通过' if rc_total == 0 else '有失败项（见上）'}")
+    if rc_total != 0:
+        print("闸门自检汇总：有失败项（见上）")
+    elif unverified:
+        print("闸门自检汇总：全绿（%d 道全过 ｜ %d 道未验 ｜ 0 红）"
+              % (ran - len(unverified), len(unverified)))
+        for u in unverified:
+            print("  未验（环境未接，非通过）：%s" % u)
+    else:
+        print("闸门自检汇总：全部通过")
     return rc_total
 
 

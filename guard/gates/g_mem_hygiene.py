@@ -225,9 +225,11 @@ def demo(cfg: ProjectConfig) -> int:
     try:
         dsh_mod, pipe_mod = g._load_memlib()
     except Exception as e:  # noqa: BLE001
-        print("  ✗ 载不进抽取器：%r" % (e,))
-        print("\n### 自检结果：1 项失败")
-        return 1
+        # ★★ 2026-10-16：本闸是**本机集成**（要读记忆库源码）。换台机器没接记忆库时
+        #   判「未验」而不是「失败」——但**未验 ≠ 通过**：汇总里单独计数、不许并进"全过"。
+        print("  ⚠ 未验：本机未接记忆库（%r）⇒ 本项无法真跑" % (e,))
+        print("\n### 自检结果：未验 1 项（环境未接：%s）" % CONFIG_REL)
+        return 0
     for r in g.check_behavior(dsh_mod, pipe_mod):
         mark = "✓" if r["ok"] is True else ("✗" if r["ok"] is False else "?")
         print("  %s %s %s" % (mark, r["id"], r["detail"]))

@@ -380,14 +380,26 @@ class XCheckGate:
         wrong = [r for r in found if r["ok"] is False]
         unver = [r for r in found if r["ok"] is None]
         checked = [r for r in found if r["ok"] is True]
-        ok = len(wrong) == 0
+        # ★★ 2026-10-16 修（本闸自己的**假通过**）：原来 `ok = len(wrong) == 0` ⇒
+        #   **一项都没真核成也报"全部相符"**。实测：本机没接记忆库时 X3 那行写着
+        #   "1 项无法复核"，而 overall 仍 ok=True ⇒ 报告里「用户说：「X」」这种
+        #   **无从核实**的话被当成核查通过（正是本闸要拦的"编造原话"）。
+        #   口径：**未核 ≠ 相符** —— 有声明、却一项都没真核成 ⇒ 判 **未验**（ok=None）。
+        #   （"什么都没声明"仍算通过：没有要核的东西，那不叫未验。）
+        if wrong:
+            ok = False
+        elif checked or not unver:
+            ok = True
+        else:
+            ok = None
 
         rep = {
             "gate": self.NAME, "ok": ok,
             "checked": len(checked), "wrong": len(wrong), "unverifiable": len(unver),
             "rows": found,
             "summary": (f"交叉复核：核了 {len(checked)} 项"
-                        + (f"；**{len(wrong)} 项对不上**" if wrong else "，全部相符")
+                        + (f"；**{len(wrong)} 项对不上**" if wrong else
+                           ("，全部相符" if (checked or not unver) else "，**无一项真核成**"))
                         + (f"；{len(unver)} 项无法复核" if unver else "")),
         }
         if wrong:
@@ -428,7 +440,9 @@ class XCheckFailed(RuntimeError):
 def demo(cfg: ProjectConfig) -> int:
     g = XCheckGate(cfg)
     fails = 0
+    unverified = 0          # ★ 环境未接 ⇒ 记未验（≠ 通过；汇总里单独计数）
     print("### 交叉复核闸 · 实例测试（用真实的盘/库）\n")
+    print("  · 记忆库：%s" % ("已接" if g.mem.exists() else "**未接**（本机没这库）"))
 
     # ── 负例 1：编造的文件路径
     print("### 负例 1：报告引用一个不存在的文件")
@@ -456,8 +470,10 @@ def demo(cfg: ProjectConfig) -> int:
         if not hit:
             fails += 1
     else:
-        print(f"  ✗ 负例 2 无法执行：样本路径不存在（{real}）⇒ 记不合格（不许静默跳过）")
-        fails += 1
+        # ★ 不静默：显式打「未验」并计入 unverified（原来记"失败"，但那是**环境缺失**、
+        #   不是判据坏了 —— 换台机器没接工作区就会红，属误伤）。
+        print(f"  ⚠ 未验：样本路径不存在（{real}）⇒ 本机未接工作区，本项无法真跑")
+        unverified += 1
     print()
 
     # ── 负例 3：编造"用户原话"
@@ -468,10 +484,14 @@ def demo(cfg: ProjectConfig) -> int:
     fake_quote = "本功能需全面重做" + _uuid.uuid4().hex[:10]
     bad3 = '用户说：「' + fake_quote + '」，所以我改了。'
     r3 = g.check_text(bad3, items=["X3"])
-    hit = not r3["ok"]
-    print(f"  {'✓✓ 拦住' if hit else '✗✗ 漏了'}  {r3['summary'][:110]}")
-    if not hit:
-        fails += 1
+    if r3["ok"] is None:                       # 未接记忆库 ⇒ 无从核实
+        print("  ⚠ 未验：本机未接记忆库 ⇒ 无法核实『原话』，本项无法真跑")
+        unverified += 1
+    else:
+        hit = not r3["ok"]
+        print(f"  {'✓✓ 拦住' if hit else '✗✗ 漏了'}  {r3['summary'][:110]}")
+        if not hit:
+            fails += 1
     print()
 
     # ── 正例 1：真说过的话
@@ -479,11 +499,15 @@ def demo(cfg: ProjectConfig) -> int:
     # ★ 中性技术短语（**不是**用户原话）；已验证库中存在：mem.py grep "去重键 调用标识" → 12 条
     good1 = '用户说：「去重键 调用标识」，我据此调整。'
     r4 = g.check_text(good1, items=["X3"])
-    print(f"  {'✓ 核实相符' if r4['ok'] else '✗ 误判'}")
-    for row in r4["rows"]:
-        print(f"      {row['detail'][:90]}")
-    if not r4["ok"]:
-        fails += 1
+    if r4["ok"] is None:
+        print("  ⚠ 未验：本机未接记忆库 ⇒ 无法核实，本项无法真跑")
+        unverified += 1
+    else:
+        print(f"  {'✓ 核实相符' if r4['ok'] else '✗ 误判'}")
+        for row in r4["rows"]:
+            print(f"      {row['detail'][:90]}")
+        if not r4["ok"]:
+            fails += 1
     print()
 
     # ── 正例 2：真存在的路径
@@ -491,9 +515,13 @@ def demo(cfg: ProjectConfig) -> int:
     good2 = (f"改动落在 `{expand_path('<WORKSPACE>/_guard/rules.yaml')}` 与 "
              f"`{expand_path('<WORKSPACE>/_guard/gates/g_struct.py')}`。")
     r5 = g.check_text(good2, items=["X1"])
-    print(f"  {'✓ 通过' if r5['ok'] else '✗ 误判：' + r5['summary'][:80]}")
-    if not r5['ok']:
-        fails += 1
+    if (not r5["ok"]) and not expand_path("<WORKSPACE>/_guard/rules.yaml").exists():
+        print("  ⚠ 未验：本机未接工作区（样本路径不存在）⇒ 本项无法真跑")
+        unverified += 1
+    else:
+        print(f"  {'✓ 通过' if r5['ok'] else '✗ 误判：' + r5['summary'][:80]}")
+        if not r5['ok']:
+            fails += 1
     print()
 
     # ★ 2026-10-15 负例（防"触发词再被收窄"复发）：
@@ -517,7 +545,11 @@ def demo(cfg: ProjectConfig) -> int:
         fails += 1
     print()
 
-    print(f"### 自检结果：{'全部通过' if fails == 0 else f'{fails} 项失败'}")
+    if fails == 0 and unverified:
+        print(f"### 自检结果：未验 {unverified} 项（环境未接：本机无记忆库/工作区样本）")
+        return 0
+    print(f"### 自检结果：{'全部通过' if fails == 0 else f'{fails} 项失败'}"
+          + (f"（另有 {unverified} 项未验）" if unverified else ""))
     return 0 if fails == 0 else 1
 
 
