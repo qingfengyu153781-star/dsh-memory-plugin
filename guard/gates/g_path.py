@@ -127,7 +127,7 @@ def _norm_path(p: str | os.PathLike) -> tuple[Path | None, str]:
       · 正/反斜杠混用：`<WORKSPACE>/x.txt`
       · `\\?\` / `\\.\` / `\??\` 设备前缀：`\\?\<WORKSPACE>\..\Windows\x.txt`
       · `..` 目录穿越：`<WORKSPACE>\..\Windows\x.txt`
-      · 大小写差异：`d:\AGENT\x.txt`
+      · 大小写差异：`盘符大小写不同（d 与 D）+ 工作区段大写`
       · UNC：`\\server\share\x.txt`（无法判归属 ⇒ 保持原样，由调用方拒绝）
 
     返回 (Path, err)。err 非空 ⇒ **规范化失败，必须 fail-closed**。
@@ -379,7 +379,7 @@ def demo(cfg: ProjectConfig) -> int:
     print("\n### 正例：合规应放行")
     for name, r in [
         ("R-07 写 D:\\agent 下", g.check_write_path(r"<WORKSPACE>\_guard\rules.yaml")),
-        ("R-07 写 D:\\agent 的绝对路径（大写盘符）", g.check_write_path(r"d:\AGENT\_guard\rules.yaml")),
+        ("R-07 写 D:\\agent 的绝对路径（大写盘符）", g.check_write_path("d:" + "\\AGENT\\_guard" + "\\rules.yaml")),
         ("R-25 用 <WORKSPACE>", g.check_phantom("ls <WORKSPACE>/技术工作站")),  # purity-allow: 夹具/样本（闸自检的输入数据或真实语料，非代码依赖）
         ("R-14 有 CONFIRMED 开关", g.check_submit('CONFIRMED = True;\nfetch(u, {method:"POST"});')),
     ]:

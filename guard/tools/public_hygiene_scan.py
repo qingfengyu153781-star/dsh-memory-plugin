@@ -19,7 +19,7 @@ linghu（FuRongJun-1999）的**边界章程**（`docs/architecture.md` §6）与
 | 类 | 规则 | 例子 |
 |---|---|---|
 | 凭据 | `CRED-*` | AWS `AKIA…` / `sk-…` / `ghp_…` / `github_pat_…` / `xox?-…` / 私钥块 / `api_key="…"` 赋值字面量 |
-| 本机路径 | `PATH-*` | `C:\\Users\\<名>\\…`、`D:\\agent\\…`、`/cygdrive/d/…` |
+| 本机路径 | `PATH-*` | `C:\\Users\\<名>\\…`、`D:\\agent\\…`、`/cygdrive/<盘符>/…` |
 | 隐私 | `PII-*` | 邮箱、内网 IP（10./192.168./172.16-31.） |
 
 **豁免**：同一行含 `hygiene-allow`（或 `nocheck`）即放过——**且必须写理由**

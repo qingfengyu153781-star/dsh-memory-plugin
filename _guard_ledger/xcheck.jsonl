@@ -1,0 +1,8 @@
+{"gate": "g_xcheck", "ok": false, "checked": 0, "wrong": 1, "unverifiable": 0, "rows": null, "summary": "交叉复核：核了 0 项；**1 项对不上**\n对不上的：\n  · **盘上不存在**", "ts": "2026-10-16T18:31:02"}
+{"gate": "g_xcheck", "ok": true, "checked": 0, "wrong": 0, "unverifiable": 1, "rows": null, "summary": "交叉复核：核了 0 项，全部相符；1 项无法复核", "ts": "2026-10-16T18:31:02"}
+{"gate": "g_xcheck", "ok": true, "checked": 0, "wrong": 0, "unverifiable": 1, "rows": null, "summary": "交叉复核：核了 0 项，全部相符；1 项无法复核", "ts": "2026-10-16T18:31:02"}
+{"gate": "g_xcheck", "ok": true, "checked": 2, "wrong": 0, "unverifiable": 0, "rows": null, "summary": "交叉复核：核了 2 项，全部相符", "ts": "2026-10-16T18:31:02"}
+{"gate": "g_xcheck", "ok": false, "checked": 0, "wrong": 1, "unverifiable": 0, "rows": null, "summary": "交叉复核：核了 0 项；**1 项对不上**\n对不上的：\n  · **盘上不存在**", "ts": "2026-10-16T18:31:43"}
+{"gate": "g_xcheck", "ok": true, "checked": 0, "wrong": 0, "unverifiable": 1, "rows": null, "summary": "交叉复核：核了 0 项，全部相符；1 项无法复核", "ts": "2026-10-16T18:31:43"}
+{"gate": "g_xcheck", "ok": true, "checked": 0, "wrong": 0, "unverifiable": 1, "rows": null, "summary": "交叉复核：核了 0 项，全部相符；1 项无法复核", "ts": "2026-10-16T18:31:43"}
+{"gate": "g_xcheck", "ok": true, "checked": 2, "wrong": 0, "unverifiable": 0, "rows": null, "summary": "交叉复核：核了 2 项，全部相符", "ts": "2026-10-16T18:31:43"}
