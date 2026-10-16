@@ -77,14 +77,24 @@ RULES = [
     ("CRED-GHPAT", "GitHub fine-grained PAT", re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b")),
     ("CRED-SLACK", "Slack token", re.compile(r"\bxox[baprs]-[A-Za-z0-9\-]{10,}\b")),
     ("CRED-PRIVKEY", "私钥块", re.compile(r"-----BEGIN [A-Z ]*PRIVATE KEY-----")),
-    ("CRED-ASSIGN", "凭据赋值字面量", re.compile(
-        r"(?i)\b(?:api[_-]?key|secret|token|password|passwd|pwd|access[_-]?key)\b"
-        r"\s*[:=]\s*['\"][^'\"\s]{8,}['\"]")),
+    # ★★ 2026-10-16 修（`--mutate` 化之前先做中立夹具对等比较，实测漏抓 2/22）：
+    #   原写法 `\b(?:api_key|secret|token|…)\b` 在 `ACCESS_TOKEN = "…"`、`client_secret = "…"`、
+    #   `aws_secret_access_key = "…"` 这三类**环境变量风格**名字上**整类漏抓** ——
+    #   因为 `_` 是单词字符，`\btoken\b` 在 `ACCESS_TOKEN` 里**没有词边界**。
+    #   这三类恰恰是真实仓库里最常见的写法（`.env`、`config.py`）。
+    #   修法：按**名字形态**判（前缀/后缀都以 `_` 连），并排除 URL 值（避免 `token_endpoint="https://…"` 误报）。
+    ("CRED-ASSIGN", "凭据赋值字面量（含 ACCESS_TOKEN / client_secret 等环境变量风格）", re.compile(
+        r"(?i)(?<![A-Za-z0-9_])(?:[a-z0-9]+[_-])*"
+        r"(?:api[_-]?key|secret|token|password|passwd|pwd|access[_-]?key)"
+        r"(?:[_-][a-z0-9]+)*\s*[:=]\s*['\"](?!https?://)[^'\"\s]{8,}['\"]")),
     # ★★ 修 ①：`{1,2}` 必须给——源码里的路径是**转义形态**（`<盘符>:\\<工作区>\\`），
     #    只写单反斜杠会整类漏掉（2026-10-16 实测：满仓本机路径报 0 命中）。
     ("PATH-WIN", "本机绝对路径（盘符+用户/工作区段，含转义形态）", re.compile(
         r"[A-Za-z]:[\\/]{1,2}(?:Users|agent|deepseekzmd)[\\/]{1,2}", re.I)),
     ("PATH-CYG", "MSYS 盘符路径", re.compile(r"/cygdrive/[a-z]/", re.I)),
+    # ★★ 2026-10-16 补：**WSL 盘符路径** `/mnt/c/…` —— 与 `/cygdrive/c/…` 同族，同为
+    #   "本机目录结构"的暴露面（实测：中立夹具上原规则整类漏抓）。
+    ("PATH-WSL", "WSL 盘符路径", re.compile(r"/mnt/[a-z]/", re.I)),
     # ★★ 2026-10-16 补：**指向本机私有记录的指针**也算泄露。
     #   起因：卫生扫描全绿之后，仓里仍留着本机会话 id 与 DB 序号 —— 它们不含凭据、
     #   不是路径，却**指向私有记录**。（用户原话那一类无法用正则判，见 README §7。）
@@ -142,6 +152,14 @@ PLACEHOLDER_PATS = ("your-", "your_", "yourkey", "<", "xxx", "***", "changeme",
 
 #: 邮箱白名单（明确不需要报的**示例/占位**域名）
 MAIL_OK_DOMAINS = ("example.com", "example.org", "example.net", "test.local", "invalid")
+
+#: ★★ 2026-10-16 补：**合成用户名**的良性写法 —— `C:/Users/test/evil`、`C:\Users\user\x`
+#: 这类是文档/夹具里的**示意**，不是"这台机器的目录结构"（真人名才是）。
+#: 依据：灵枢仓 `scripts/check_local_paths.py` 把这类**明写为有意放行**
+#:   （「不在判据面：合成夹具 X:/custom、G:/fake、C:/Users/test/evil 等」）。
+#: 我们对齐该口径 ⇒ 消掉中立夹具上 1 例误报，且**不丢真形态**（真名不在此列）。
+PATH_SYNTHETIC_USERS = re.compile(
+    r"(?i)[\\/]users[\\/](?:test|user|example|foo|bar|someone|username|your[-_]?name)[\\/]")
 
 MAX_EXCERPT = 120
 
@@ -278,6 +296,8 @@ def scan_file(path: Path, *, raw: bool = False, ignore_rules: tuple = (),
                 if rule_id == "PII-MAIL" and any(
                         token.lower().endswith("@" + d) for d in MAIL_OK_DOMAINS):
                     continue
+                if rule_id == "PATH-WIN" and PATH_SYNTHETIC_USERS.search(line):
+                    continue                       # 合成用户名（test/user/example…）不是本机结构
                 if rule_id.startswith("CRED-") and any(
                         p in token.lower() for p in PLACEHOLDER_PATS):
                     continue                       # 占位符 / 测试假值，正当
@@ -382,6 +402,21 @@ SELFTEST_CASES = [
     #   反例：**格式说明**里的 seq 不是指针（正则写法）⇒ 不该误报
     ("格式说明里的 seq（不误报）", "n.txt",
      r"EXEMPT = r'经用户确认\(seq\s*=?\s*(\d+)\)'" + "\n", None, False),
+    # ★★ 2026-10-16 中立夹具对等比较暴露的三处漏抓（T09/T10/T16）+ 一处误报（F10），逐条立回归例：
+    ("环境变量风格 ACCESS_TOKEN（原整类漏抓）", "o.txt",
+     'ACCESS_TOKEN = "' + 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"\n', "CRED-ASSIGN", False),
+    ("下划线连接 client_secret（原整类漏抓）", "p.txt",
+     'client_secret = "' + 'wJalrXUtnFEMI7KMDENGbPxRfiCY"\n', "CRED-ASSIGN", False),
+    ("aws_secret_access_key（原整类漏抓）", "q.txt",
+     'aws_secret_access_key = "' + 'wJalrXUtnFEMI7KMDENGbPxRfiCY"\n', "CRED-ASSIGN", False),
+    #   反例：URL 值不是凭据 ⇒ 不该误报
+    ("token_endpoint=URL（不误报）", "r.txt",
+     'token_endpoint = "' + 'https://api.example.com/v1/token"\n', None, False),
+    ("WSL /mnt/c 盘符路径（原整类漏抓）", "s.txt",
+     'p = "/mnt/' + 'c/Users/someone/work"\n', "PATH-WSL", False),
+    #   反例：**合成用户名**是他们明写放行的良性写法 ⇒ 不该误报（对齐他们的口径）
+    ("合成用户名 C:/Users/test（不误报）", "t.txt",
+     'p = "C:/Users/' + 'test/evil"\n', None, False),
 ]
 
 
