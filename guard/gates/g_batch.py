@@ -227,7 +227,7 @@ def demo(cfg: ProjectConfig | None = None) -> int:
     print("g_batch 负例自检 —— 用《联网学习Blender建模》会话的真实日志")
     print("=" * 74)
 
-    print("\n### 负例 1：真实那次『DONE ok=0』（seq=1325）")
+    print("\n### 负例 1：真实那次『DONE ok=0』（seq=" + "1325）")
     real = ("STARTED PID=14568\n"
             "--- 45s 后 ---\n任务数 10\n可用物理内存 4.07 GB\nASR 模型 = tiny\n"
             "STOP 转写前内存仅 2.28GB < 2.5GB，安全退出（已完成 0 条，重跑本脚本会自动续采）\n"

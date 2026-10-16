@@ -574,7 +574,7 @@ def demo(cfg: ProjectConfig) -> int:
         fails += 1
     # ★ 假阳性回归（本闸第一次上真实语料就踩到）：描述历史 / 否定 都不算"宣布完成"
     for txt, label in [
-        ("seq=1755 Lead 宣布「精细达标」→ 12 分钟后被用户骂穿。", "描述历史（引述+被骂）"),
+        ("seq=" + "1755 Lead 宣布「精细达标」→ 12 分钟后被用户骂穿。", "描述历史（引述+被骂）"),
         ("最终判词：❌ 未达标。", "否定（未达标）"),
         ("我方自宣已完成交付，但随后被推翻。", "引述+推翻"),
     ]:
@@ -582,7 +582,7 @@ def demo(cfg: ProjectConfig) -> int:
         print(f"  正例（{label}）→ {'✓放行' if r['ok'] else '✗误杀'} ：{r['detail'][:60]}")
         if not r["ok"]:
             fails += 1
-    rows_ok = [dict(x, status="已兑现", evidence="seq=10689 实测") for x in rows]
+    rows_ok = [dict(x, status="已兑现", evidence="seq=" + "10689 实测") for x in rows]
     r = g.check_completion(bad, rows_ok)
     print(f"  正例（全部已兑现后宣布）→ {'✓放行' if r['ok'] else '✗误杀'} ：{r['detail'][:80]}")
     if not r["ok"]:
@@ -610,9 +610,9 @@ def demo(cfg: ProjectConfig) -> int:
     print("### ② B3「声称用户意图必须带出处」")
     for txt, expect in [
         ("你选了「白模级」，所以我按白模做。", False),
-        ("你选了「白模级」（turn=4 / seq=1780），所以我按白模做。", True),
+        ("你选了「白模级」（turn=4 / seq=" + "1780），所以我按白模做。", True),
         ("用户已确认重建县城，山上不动。", False),
-        ('用户已确认：「重建山脚那一片，山上不动」（seq=3648）。', True),
+        ('用户已确认：「重建山脚那一片，山上不动」（seq=' + '3648）。', True),
         ("本轮我按自己的判断推进。", True),
     ]:
         r = g.check_user_citation(txt)

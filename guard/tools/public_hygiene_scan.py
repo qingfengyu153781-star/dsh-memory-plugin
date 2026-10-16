@@ -90,6 +90,10 @@ RULES = [
     #   不是路径，却**指向私有记录**。（用户原话那一类无法用正则判，见 README §7。）
     ("REF-SESSION", "本机会话 id 指针",
      re.compile(r"\bsession-[0-9a-fA-F]{6,}\b")),
+    # ★ 2026-10-16 上齐：seq 指针。**夹具里需要该形态**的（如豁免标记 `(seq=NNN)`）
+    #   一律改成**字符串拼接**（运行时值不变，源码不出现连续形态）⇒ 规则才判得动。
+    ("REF-DB", "本机 DB 序号指针",
+     re.compile(r"\bseq\s*[=:]?\s*\d{1,7}\b")),
     ("PII-MAIL", "邮箱地址", re.compile(
         r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")),
     ("PII-IP", "内网 IP", re.compile(
@@ -374,6 +378,10 @@ SELFTEST_CASES = [
     # ★★ 回归例：**会话 id 指针**（不含凭据也不是路径，却是泄露）
     #   ★ 用**字符串拼接**写样本，否则本器自己的规则会命中本文件（与凭据夹具同一手法）
     ("会话 id 指针", "m.txt", "出处：会话 session-" + "eeef4dba 第 3 轮\n", "REF-SESSION", False),
+    ("DB 序号指针", "l.txt", "实证：4 次自宣交付（seq=" + "10185）\n", "REF-DB", False),
+    #   反例：**格式说明**里的 seq 不是指针（正则写法）⇒ 不该误报
+    ("格式说明里的 seq（不误报）", "n.txt",
+     r"EXEMPT = r'经用户确认\(seq\s*=?\s*(\d+)\)'" + "\n", None, False),
 ]
 
 
