@@ -231,7 +231,7 @@ class PathGate:
         实测漏放（见 findings_B.md ⑭）：
           · `/d/agent` → 拦住 ✓；但 `/D/agent`（大写盘符）→ 原正则 `(?<![\w/])/d/agent`
             在 re.I **未传** 的情况下大小写敏感 ⇒ 漏放；实际调用处也没传 re.I。
-          · `/d/Temp/x`、`/cygdrive/c/Users`、`/mnt/d/agent` 等本机真实会写错的形态未覆盖。
+          · `/d/Temp/x`、`/cygdrive/c/Users`、`/mnt/d/agent` 等本机真实会写错的形态未覆盖。  # hygiene-allow: 本闸自证夹具——g_path 就是判这类本机路径的，示例必须带本机形态
         判据量错对象：要判的是"这个路径在 bash 语义下会不会落进幻影树"，
         原判据量的是"字符串里有没有出现这两个固定字面量"。
         """
@@ -241,7 +241,7 @@ class PathGate:
         if hits:
             r = {"gate": "g_path", "rule": "R-25", "ok": False,
                  "detail": (f"命令里出现幻影盘符写法 {sorted(set(hits))} —— "
-                            f"本机 bash 用 /cygdrive/d/...；/d/... 会落进 runtime 目录"
+                            f"本机 bash 用 /cygdrive/d/...；/d/... 会落进 runtime 目录"  # hygiene-allow: 本闸自证夹具——g_path 就是判这类本机路径的，示例必须带本机形态
                             f"（写入报成功但磁盘上没有）")}
         else:
             r = {"gate": "g_path", "rule": "R-25", "ok": True, "detail": "无幻影路径写法"}
