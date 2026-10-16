@@ -1,0 +1,29 @@
+{
+  "_why": "★ R-64 的声明面：改动**命中**这些面 ⇒ 自动跑对应集成回归；不命中 ⇒ 报告里显式写「未跑」（不许静默当绿）。起因：2026-10-15 脑融合写完后，我把端到端回归 test/brain_fusion.mjs 手敲跑通，第二天复核才发现 package.json 的 test 脚本里**没有它** —— 也就是说它下次靠人记得跑，忘了就等于没有。",
+  "_discipline": "只声明**真能跑、且快**（≤10 分钟）的集成回归；命令里不许有需要人工确认的动作。",
+
+  "integration": [
+    {
+      "name": "dsh-memory-plugin 全量回归（selfcheck + inject + 脑融合 + orch_regress）",
+      "patterns": [
+        "plugin-src/dsh-memory-plugin/",
+        "src/memlib/brain.py",
+        "bin/mem.py"
+      ],
+      "cwd": "D:\\agent\\dsh-rag-memory\\plugin-src\\dsh-memory-plugin",
+      "cmd": ["npm", "test"],
+      "timeout_seconds": 600
+    },
+    {
+      "name": "记忆库入口冒烟（stats + 编排状态 + 脑状态）",
+      "patterns": [
+        "bin/mem.py",
+        "src/memlib/",
+        "index/memory.sqlite"
+      ],
+      "cwd": "D:\\agent\\dsh-rag-memory",
+      "cmd": ["python", "bin/mem.py", "orchestrate-status"],
+      "timeout_seconds": 300
+    }
+  ]
+}

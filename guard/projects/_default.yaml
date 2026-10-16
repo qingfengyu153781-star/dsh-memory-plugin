@@ -1,0 +1,107 @@
+# _guard · 通用默认配置（护栏的"底盘"）
+# 用途：在没有项目专有配置的目录里跑闸门时用它兜底 —— 与用户"所有项目通用"的要求一致。
+# 它只放**跨项目通用的规矩**（语言、版本、对象保护、完成定义），不放任何项目专有口径。
+
+project: _default
+universal: true
+
+# 已装闸门（九道）—— status 会拿这份与磁盘文件比对，不一致就报红
+gates: [spec, vault, obj, probe, done, lang, cap, root, intent, path, struct, xcheck, vision, decision, doc, behavior, mem]
+
+# 语言闸（用户明令 2026-10-03：用中文交流）
+language:
+  required: zh
+  # ★ 2026-10-03 修：原为 0.40「通用底盘放宽」，但 AGENTS.md 的规矩写的是「正文 ≥60%」
+  #   ⇒ **闸门比规矩松 20 个百分点** ⇒ "中英夹杂"（实测 52.5%）本该拦却被放行。
+  #   **判据必须与规矩同口径**：统一到 0.60，与 巫山女.yaml 一致。
+  min_cjk_ratio: 0.60          # 正文（含表格/数字）≥60% —— 与 AGENTS.md 口径一致
+  min_cjk_ratio_prose: 0.85    # 纯说明段落：严格
+  allowlist: [DSH, Blender, md5, mp4, png, ffmpeg, JSON, YAML, API, RT, DAG, SQL, RAG, FTS5, CLI]
+
+# 版本闸：默认保护当前目录下的常见资产类型
+vault:
+  dir: "_guard_vault"
+  extensions: [".blend", ".md", ".xlsx", ".pptx", ".docx", ".py", ".json", ".yaml"]
+  keep: 50
+  # ★ 2026-10-04 新增（task-7 · P1-性能）：扫描排除清单
+  #   背景：write_paths: ["."] = 整个 <WORKSPACE>。实测 targets() 全量扫描
+  #         **82.1 秒 / 62,109 个文件**，其中 81.4% 在依赖/日志/工具目录里
+  #         ⇒ "每次写操作前留回滚点"这一步根本挂不上去。
+  #   机制：代码里的 DEFAULT_EXCLUDE 已排除 .venv/node_modules/__pycache__/_guard_vault 等；
+  #         这里补**本工作区特有**的非资产目录（第三方 App 家目录、临时草稿区）。
+  #   ★ 判定口径：这些目录里的文件**不是本项目的资产** ——
+  #     它们是工具自己的状态/日志/下载缓存，回滚它们没有意义，而且拖慢每次写入。
+  #   ★ 底线：`_guard_vault`（版本库自身）与 `_guard_ledger`（台账）在代码里硬排除，
+  #     项目 yaml 改不掉（否则备份会把自己当源 ⇒ 指数增殖，已修过一次）。
+  exclude:
+    - qoder-home          # Qoder App 家目录（plugins/projects/logs/*.jsonl —— 306+ 个 json）
+    - _tmp_video_learn    # 一次性视频学习草稿区（api.log / addon_zips / allbp.txt）
+    - ComfyUI             # ComfyUI 部署（含 models/ 与自定义节点的第三方代码）
+    - _logs               # 本工作区日志目录
+    - 本地H3部署/.venv     # H3 部署的虚拟环境（代码里已按名排除 .venv，此处为显式声明）
+    # ── ★ 2026-10-04 Lead 拍板新增：**属于别的项目**的目录 ──
+    #    本工作区（<WORKSPACE>）下有九个互不相关的项目，`write_paths: ["."]` 会
+    #    让任何一个项目的写操作都去备份**所有项目**（实测 2001 个命中里
+    #    本地H3部署 1047 + 自动化AI视频产线 548 + 选课系统 96 …）。
+    #    它们不是本项目资产 ⇒ 备份无意义、且拖慢每次写入。
+    - 本地H3部署
+    - 自动化AI视频产线
+    - 选课系统
+    - 竞赛调研_2026-09-27
+    - 经验复盘             # 跨项目共享知识库（AGENTS.md 引用，非本项目资产）
+    - 火山方舟-ark
+    - 视频提示词方法论_技能
+  # 性能护栏：超过就报错要求显式确认，不许静默跑几十秒
+  max_targets: 2000       # 单次全量扫描命中上限
+  max_seconds: 5.0        # 单次全量扫描耗时上限（秒）
+  # ══════════════════════════════════════════════════════════════════════
+  # ★★ 2026-10-04 Lead 拍板：`write_paths: ["."]` 的口径问题
+  #
+  # **问题**：`"."` 把**"工作区根"**当成了**"项目根"**。
+  #   实测 `<WORKSPACE>` 下有**九个互不相关的项目**
+  #   （本地H3部署 1047 个资产 / 自动化AI视频产线 548 / 选课系统 96 /
+  #     竞赛调研_2026-09-27 51 / 枫独创新大赛_2026 26 / 经验复盘 14 / …），
+  #   而 `["."]` 会让**任何一个项目**的写操作都去备份**所有项目的文件**。
+  #
+  # **对照证据（这是判据，不是偏好）**：
+  #   · `巫山女.yaml` **做对了** —— 只圈自己那三个目录：
+  #       `_previs/S01`、`_previs/_regions`、`_previs/_assets`
+  #   · `_default.yaml` 与 `枫独.yaml` 用 `"."` ⇒ 圈了全部九个项目
+  #   ⇒ **同一套工具、两种口径**，而松的那个是"通用底盘"。
+  #
+  # **裁定**：
+  #   ① `_default`（通用底盘）**无法预知**项目有哪些子目录 ⇒ 保持 `"."`，
+  #      但**必须同时靠** exclude（排除非资产）+ 性能护栏（超出即报错）；
+  #   ② **具体项目**应像 `巫山女.yaml` 那样**显式圈定自己的资产目录**（本次已给枫独加注）；
+  #   ③ 属于**别的项目**的目录，一律进 exclude —— 它们不是本项目资产，
+  #      备份它们既无意义、又拖慢每次写入。
+  # ══════════════════════════════════════════════════════════════════════
+  exclude_extra_DISABLED:   # ←★ 键名错了，正确键名是上面的 `exclude`（此键不会被读）
+    - "(占位，见上方 exclude)"
+
+write_paths: ["."]
+
+# 对象闸：通用底盘不认识具体项目，保护名单留空（由项目 yaml 填）
+protected: []
+
+# 口径闸：通用底盘没有项目专有断言（由项目 yaml 填）
+assertions: {}
+
+# 能力闸：本机插件清单由运行时/磁盘**现场算出**，不手抄
+capability:
+  sources:
+    - kind: dsh_profile_node_modules     # 本机已装插件
+      path: "<HOME>/.dsh/profiles/desktop/node_modules"
+    - kind: dsh_skills                    # 技能中心
+      path: "<HOME>/.dsh/skills"
+    - kind: workspace_skills              # 工作区技能
+      path: "<WORKSPACE>/skills"
+    - kind: blender_addon_commands        # Blender 插件命令（运行时接口）
+      runtime: blender_rt_commands
+  refresh_on_use: true                    # 每次用时重算，禁止用过期清单
+
+done_checks:
+  - 接触表/物证（禁止只报数字）
+  - spec 断言全绿（若有）
+  - probe 自证（含负例）
+  - 语言闸通过（中文）

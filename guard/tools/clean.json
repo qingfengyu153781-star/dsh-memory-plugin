@@ -1,0 +1,19 @@
+{
+  "_why": "R-69 声明面：要判整洁的仓 + 允许清单。",
+  "repos": [
+    "D:\u0007gent\\_guard",
+    "D:\u0007gent\\dsh-rag-memory"
+  ],
+  "allow": [
+    "_guard_ledger/",
+    "_tmp/",
+    "_guard_vault/",
+    "backups/",
+    "index/",
+    "raw/",
+    "brain_root/",
+    "staged/",
+    "vendor/",
+    "reports/"
+  ]
+}

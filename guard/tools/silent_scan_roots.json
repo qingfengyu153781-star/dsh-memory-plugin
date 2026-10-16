@@ -1,0 +1,30 @@
+{
+  "_comment": "g_silent（R-54）的扫描根清单 —— 配置而非硬编码：通用层（_guard/gates/*.py）不许写死具体项目路径（纪律见 R-56 / g_purity）。",
+  "_format": "roots[]：name 显示名 / root 仓库根 / paths 扫描面（相对 root，或绝对）/ baseline 基线文件（绝对路径）",
+  "_note": "绝对路径只允许出现在本配置文件里；改这里不需要动代码。",
+  "roots": [
+    {
+      "name": "_guard 自身（护栏代码）",
+      "root": "<WORKSPACE>/_guard",
+      "paths": [
+        "gates",
+        "guard.py",
+        "guard_cli.py",
+        "hook.py",
+        "rules.py",
+        "run_cases.py",
+        "tools"
+      ],
+      "baseline": "<WORKSPACE>/_guard/tools/silent_except_baseline.txt",
+      "_note_tools": "★ 2026-10-15 补：原本只扫 gates+五个根文件，**护栏工具层 tools/ 是盲区**（新增的对抗电池就落在这里）"
+    },
+    {
+      "name": "dsh-rag-memory（记忆库）",
+      "root": "<WORKSPACE>/dsh-rag-memory",
+      "paths": [
+        "bin"
+      ],
+      "baseline": "<WORKSPACE>/_guard/tools/silent_except_baseline.mem.txt"
+    }
+  ]
+}

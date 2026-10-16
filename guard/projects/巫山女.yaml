@@ -1,0 +1,84 @@
+# _guard 项目配置 · 《巫山女》3D 预演
+# 闸门逻辑在 ../gates/，本文件只放"这个项目的差异"。
+# 换项目 = 换一份 yaml，不动任何代码。
+
+project: 巫山女
+project_root_hint: "D:\\agent\\技术工作站\\巫山女剧本   （已可自动识别，无需再传）"
+gates: [spec, vault, obj, probe, done, lang, cap, root, intent, path, struct, xcheck, vision, decision, doc, behavior, mem]
+
+# 语言闸（用户明令 2026-10-03：用中文交流）—— 本项目要求严格
+language:
+  required: zh
+  min_cjk_ratio: 0.60          # 正文（含表格/数字）≥60%
+  min_cjk_ratio_prose: 0.85    # 纯说明段落 ≥85%
+  allowlist: [DSH, Blender, md5, mp4, png, ffmpeg, JSON, YAML, EEVEE, NDC, ID, UI, API]
+
+# 自动识别指纹：这些文件同时存在 ≥2 个，就认定"当前在这个项目里"
+fingerprint:
+  - "06_分镜表.md"
+  - "09_建模清单.md"
+  - "_全片3D预演_派工单_20261002.md"
+  - "_previs"
+  - "_draft_剧本_上半.md"
+
+# 口径闸去哪读标准（相对项目根；全部可指、可复算）
+spec_sources:
+  - "06_分镜表.md"
+  - "_previs/S01/搭建单_S01.md"
+  - "09_建模清单.md"
+  - "_全片3D预演_派工单_20261002.md"
+
+# 口径闸要断言的量（值域来自上述标准的原文）
+assertions:
+  山道.宽度_m: [1.30, 1.40]
+  山道.横断面带数: 1
+  石磴.阶高_m: [0.14, 0.16]
+  石磴.踏面_m: [0.64, 0.66]
+  石磴.每级四角_gap_m: {abs_max: 0.02}
+  路_地形_高差_m: {abs_max: 0.05}
+  人物占画高: [0.0, 0.25]
+
+# Blender 侧取数适配器的绑定：断言键 → 场景里量哪个对象
+# （闸门代码不认这些名字；换项目只换这一段）
+probe_binds:
+  山道.宽度_m:
+    name: "SM_S01_山道_A"
+  山道.横断面带数:
+    name: "SM_S01_山道_A"
+  石磴.阶高_m:
+    prefix: "SM_S01_石磴_"
+  石磴.踏面_m:
+    prefix: "SM_S01_石磴_"
+  石磴.每级四角_gap_m:
+    prefix: "SM_S01_石磴_"
+    terrain: "SM_S01_地形_主体_"
+  路_地形_高差_m:
+    road: "SM_S01_山道_A"
+    terrain: "SM_S01_地形_主体_"
+  人物占画高:
+    prefix: "SM_CHR_C04_JiNv_"
+
+# 版本闸：保护哪些路径下的资产、保留多少份
+vault:
+  dir: "_previs/_guard_vault"
+  extensions: [".blend"]
+  keep: 50
+
+write_paths:
+  - "_previs/S01"
+  - "_previs/_regions"
+  - "_previs/_assets"
+
+# 对象闸：哪些是"用户认可的标准件"，禁止重建/删除
+protected:
+  - "**/SM_S01_山道_A*"
+  - "**/SM_S01_石磴_*"
+  - "**/SM_S01_坟*"
+  - "**/SM_S01_碑*"
+
+# 完成闸：宣布"S01-x 完成"必须逐项通过
+done_checks:
+  - 接触表（抽 >=5 帧拼图，每格 >=480x270）
+  - spec 断言全绿
+  - probe 自证（含负例）
+  - 打印 人物占画高 / 主要件在框率 / 帧数 / 时长

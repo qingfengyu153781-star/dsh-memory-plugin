@@ -1,0 +1,6 @@
+{
+  "_why": "R-67 的声明面：claim（声明）+ quotes（引文）；coverage_only=true 表示『依据只有关键词覆盖』。未配 ⇒ hook 显式写「判据未跑，非通过」。",
+  "claim": "",
+  "quotes": [],
+  "coverage_only": false
+}

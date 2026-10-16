@@ -1,0 +1,6 @@
+{
+  "_note": "R-58 记忆库管道卫生闸（g_mem_hygiene）的扫描面。本地路径不进闸代码（见 R-56 通用层纯净性）。",
+  "_created": "2026-10-15",
+  "mem_root": "D:\\agent\\dsh-rag-memory",
+  "plugin_dir": "C:\\Users\\pop\\.dsh\\profiles\\desktop\\node_modules\\dsh-memory-plugin"
+}

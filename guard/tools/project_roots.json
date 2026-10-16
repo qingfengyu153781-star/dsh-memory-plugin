@@ -1,0 +1,15 @@
+{
+  "_comment": "项目名 → {prefix, root}（R-56：项目专有内容不进代码，集中在这里）。",
+  "_used_by": "run_cases.py（负例库跑法：按项目挑用例、定位项目根）",
+  "_override": "命令行 --project-root 优先于此处的 root。",
+  "projects": {
+    "巫山女": {
+      "prefix": "W",
+      "root": "<WORKSPACE>/技术工作站/巫山女剧本"
+    },
+    "枫独": {
+      "prefix": "F",
+      "root": "<WORKSPACE>/枫独创新大赛_2026"
+    }
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "_intro": "来源面登记表（R-60 · g_prov 的唯一真源）。这张表是**冻结声明**：登记 2026-10-15 实测的形态。闸**不会**自动更新它——新增来源/新增 kind 必须有人显式改这里并写明理由，否则 P1 判红（灵枢 §6.1「不静默放行新 kind」同款）。",
+  "_frozen_at": "2026-10-15T21:30+08:00",
+  "_measured_by": "_guard/_tmp/prov_registry_dump.py + recon_a.py + recon_f1.py + why_133.py（库侧一律 mode=ro）",
+  "_why_baseline_not_threshold": "缺口用**绝对条数**记，不用百分比阈值：阈值一改就能变绿（假根治）。基线含义是「存量缺口就这么些，只防新增」——与灵枢 tools/*_lint.py 的 baseline 纪律同款（只上尺子定基线、只防新增；判因在前，不许只改数字）。",
+  "_json_quote_rule": "本文件里凡是中文行文内的引用一律用「」，**不许用 ASCII 双引号**——2026-10-15 我为此把本文件写坏过四次（JSON 解析失败），而 g_prov 对解析失败是 fail-closed 判红，等于闸自己瘫了。",
+
+  "db": "D:\\agent\\dsh-rag-memory\\index\\memory.sqlite",
+  "_db_note": "本机记忆库路径放在登记面，通用层代码不写死（R-56）。",
+  "relevant_patterns": ["dsh-rag-memory", "memlib", "memory.sqlite"],
+  "_relevant_note": "hook.py 的自动路用它判断「本次改动是否会引入来源面违规」（命中 ⇒ 无条件跑；否则按窗口节流）。放配置里是因为通用层代码不许写死具体项目路径或项目名（R-56 / g_purity）。",
+
+  "autoverify": {
+    "_why": "★ 把「核验批次」从『要人记得跑』改成自动兜底：入库收尾已自动核本次新增（bin/mem.py 的收尾核验），这里再兜一层——防止**非入库路径**（别的写入方/旧批次）留下未核验原子。判据是 pending 数量门槛 + 节流 + 遇入库锁自动跳过，**跳过也会写明原因**。",
+    "cmd": ["python", "-X", "utf8", "bin/mem.py", "verify-atoms",
+            "--method", "raw_reopen", "--limit", "8000", "--apply"],
+    "cwd": "D:\\agent\\dsh-rag-memory",
+    "min_pending": 500,
+    "throttle_seconds": 900,
+    "lock_file": "D:\\agent\\dsh-rag-memory\\index\\.ingest.lock",
+    "timeout_seconds": 300
+  },
+
+  "source_kind_role_map": {
+    "dsh": {
+      "assistant_reasoning": ["assistant"],
+      "assistant_text": ["assistant"],
+      "command": ["user"],
+      "compaction_summary": ["system"],
+      "deliverable": ["system"],
+      "goal": ["system"],
+      "note": ["system"],
+      "plugin_injection": ["plugin"],
+      "spliced_user": ["user"],
+      "system_text": ["system"],
+      "title": ["system"],
+      "todo": ["system"],
+      "tool_call": ["tool"],
+      "tool_result": ["tool"],
+      "user_text": ["user"]
+    },
+    "claude_code": {
+      "assistant_reasoning": ["assistant"],
+      "assistant_text": ["assistant", "system"],
+      "tool_call": ["assistant"],
+      "tool_result": ["tool"],
+      "user_text": ["user"]
+    },
+    "cursor": {
+      "assistant_text": ["assistant"],
+      "tool_call": ["assistant"],
+      "tool_result": ["tool"],
+      "user_text": ["user"]
+    },
+    "qoder": {
+      "assistant_reasoning": ["assistant"],
+      "assistant_text": ["assistant", "system"],
+      "tool_call": ["assistant"],
+      "tool_result": ["tool"],
+      "user_text": ["user"]
+    }
+  },
+  "_source_kind_role_note": "★ 判据按 **(source, kind, role)** 三元组，不按 (kind, role) 二元组。实测证据：`tool_call` 在 dsh 下 role=tool、在 claude_code/cursor/qoder 下 role=assistant；`assistant_text` 在 claude_code/qoder 下还多一种 role=system。只登记 kind 粒度会**看不见「某个来源新学了一套口径」**——那正是「静默放行新 kind」换了个马甲。",
+
+  "kind_role_map": {},
+  "_kind_role_fallback_note": "兜底面留空（fail-closed）：新来源若不显式声明，它的每一种组合都会判红。这是有意的——**「没见过」不许当作「没问题」**。",
+
+  "human_role": "user",
+  "human_kinds": ["user_text", "spliced_user", "command"],
+  "_human_note": "真人面白名单（fail-closed）：**除此之外任何 kind 出现 role=user 即判红**。实测现状（2026-10-15）：真人 user_text 6959（dsh 2633 / claude_code 4231 / cursor 51 / qoder 44）+ spliced_user 2764 + command 93。",
+
+  "injection_kinds": ["plugin_injection"],
+  "_injection_note": "注入类（插件/框架往对话里塞的内容），实测 24,567 条 role=plugin，且 R-58 已挡在检索面外（pipeline.NO_CHUNK）。P2 检查的是**它们有没有被洗成真人面**。",
+
+  "questions": {
+    "q1_who": {
+      "provided": true,
+      "columns": ["role"],
+      "baseline_gap": 0
+    },
+    "q2_position": {
+      "provided": true,
+      "columns": ["observation_position"],
+      "baseline_gap": 0,
+      "_note": "2026-10-15 由「代理」升为「提供」：新建 `atoms.observation_position` 列（入库时由 pipeline.stamp_position 写入 + 存量按 sessions 表 join 回填 326,106 条，缺口 0）。形态＝`源·会话来源·工作区`（如 `dsh·user·D:\\agent`）。★ 诚实边界：粒度**止于会话**，不是逐条记录——原始记录里没有逐条的观测位字段；且**没有**灵枢那种物理观测位（感知·摄像头 / 感知·屏幕）。"
+    },
+    "q3_tool": {
+      "provided": true,
+      "columns": ["tool_name"],
+      "applies_to_kinds": ["tool_call", "tool_result"],
+      "baseline_gap": 1,
+      "_note": "2026-10-15 三次收口：①先按 (session_id, call_id) 自连接回填 **98,845** 条 ②★**根治**：`dsh.extract_atoms` 在抽取阶段维护 `callId→工具名`，`tool_result` **入库即带名**（回填降为兜底）③★★**再根治**：`merge_versions` 的去重键从 `(kind, hash)` 改为 `(kind, hash, call_id)` —— 原键会因为「空参调用的正文都是 `{}`」把 **438 个不同调用合成 1 个**，导致对应 result 永久找不到名字（实测 133 条）。修后全量重入：无名 result **133 → 1**，并救回 **2,726** 条被合并吃掉的原子。基线 **1**：那唯一一条是**被中断的 tool_result**（原始记录 message id 以 `interrupted-tool-result-` 开头，**全文件没有对应的 `tool/call`**，记录自身也不带工具名）⇒ 真实不可回填，已逐条判因。若再出现第 2 条无名 result，闸当场红。"
+    },
+    "q4_session": {
+      "provided": true,
+      "columns": ["session_id"],
+      "baseline_gap": 0
+    },
+    "q5_time": {
+      "provided": true,
+      "columns": ["time"],
+      "baseline_gap": 410,
+      "presence_columns": ["time_basis"],
+      "_note": "全库仅 **410** 条无时间戳，**全部**来自 cursor（cursor 共 991 条 ⇒ 581 条**有**时间）。★ 这里曾写成 `excluded_sources: {cursor: ...}`（整源排除），被 P3 当场判红：**该源 581/991 有值 ⇒ 排除声明过期**。根因是**判据量错对象**——证据只支持「该源的**部分**记录不提供逐条时间戳」（实测那批 `.jsonl` 顶层只有 `{role, message}`），不支持「该源不提供」。现在按**存量缺口**记基线（410），不按源排除；原始记录里无从取 ⇒ **不臆造**（不拿会话 first/last_time 顶替）。另加 `presence_columns: [time_basis]`（schema v3 新列）：`record`＝取自原始记录、`source_absent`＝**源头就没有** ⇒ 该列**一条都不许空**。理由：`time IS NULL` 是**沉默的缺口**，读的人分不清「我们没读到」与「源头没有」；显式化之后两者一眼可分（与 `verify_status` 同款取向）。"
+    },
+    "q6_verified": {
+      "provided": true,
+      "columns": ["verify_status"],
+      "mode": "presence",
+      "baseline_gap": 0,
+      "_note": "2026-10-15 新建 `verify_status/verify_method/verify_ref/verified_at` 四列（schema v2），并把「没验证」做成**显式状态** `unverified`（列 DEFAULT 兜住新入库），而不是留 NULL 当未知 ⇒ presence 模式：该列必须**每行都有显式取值**（缺口 0）。★★「unverified 覆盖 100%」**不等于**「已验证 100%」——两码事，别混；真核验数由 P5 读数单独报。核验通路：`bin/mem.py verify-atoms`（`raw_reopen` 流式重开原档比对 / `cross_source` 交叉来源确认），`.jsonl` 与 `.zstd` 都支持；`state.vscdb` 这类**非逐行形态**显式记 `source_not_jsonl`。状态语义：`reopened_ok`＝正文在该行原记录里；`text_not_found`＝**没验上**（派生或拼接文本，**不主张**内容变了）；`source_unreadable`＝原档读不成 JSON。"
+    }
+  },
+
+  "prov_column_semantics": {
+    "declared": "file_origin",
+    "observed_keys": ["file", "line", "version", "backup"],
+    "note": "★ 这是本次实测最要紧的发现：`prov` 列 100% 覆盖，但它是**文件出处**（抄自哪个文件哪一行），**不是来源契约**。名字叫 prov 却不定语义，就等着被当成「我们已经记了溯源」用——所以 P4 把声明的语义与库里的实际键对上账。2026-10-15 起 dsh 源也带上 `line`（`parse_jsonl_with_lines`），使 raw_reopen 对 dsh 也可用。"
+  }
+}

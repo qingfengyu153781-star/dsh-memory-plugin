@@ -1,0 +1,27 @@
+{
+  "_why": "R-68 声明面：核验器 × 被检对象（同源/null 都要声明）。",
+  "pairs": [
+    {
+      "checker": "gates/g_prov.py",
+      "subject": [
+        "memlib/store.py"
+      ]
+    },
+    {
+      "checker": "gates/g_syntax.py",
+      "subject": []
+    },
+    {
+      "checker": "gates/g_integ.py",
+      "subject": []
+    },
+    {
+      "checker": "gates/g_directional.py",
+      "subject": []
+    },
+    {
+      "checker": "gates/g_polarity.py",
+      "subject": []
+    }
+  ]
+}

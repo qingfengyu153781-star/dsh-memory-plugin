@@ -1,0 +1,17 @@
+{
+  "_comment": "通用层（_guard）的【本机专有路径】配置 —— R-56：这些路径不进代码，集中在这里。",
+  "_why": "闸要能跨项目、跨机复用；路径写死在 gates/*.py 里会让通用层只在某一台机器上成立。",
+  "_override": "每个键都可用同名环境变量覆盖（见对应闸的读取函数）。",
+  "_format": "键 -> 绝对路径（正斜杠）",
+
+  "mem_py": {
+    "path": "<WORKSPACE>/dsh-rag-memory/bin/mem.py",
+    "env": "DSH_MEM_PY",
+    "used_by": "gates/g_xcheck.py（交叉复核：去记忆库核条文）"
+  },
+  "credentials_yaml": {
+    "path": "<HOME>/.dsh/.credentials.yaml",
+    "env": "DSH_CREDENTIALS",
+    "used_by": "gates/g_vision.py（视觉核验：读 API key）"
+  }
+}

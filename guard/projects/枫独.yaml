@@ -1,0 +1,44 @@
+# _guard 项目配置 · 枫独创新大赛_2026（第二个项目：用来证明跨项目）
+# 与《巫山女》共用同一套闸门逻辑，只换差异：断言表、受保护路径、交付检查项。
+# 领域完全不同（文档/PPT/Excel 而非 3D），闸门代码一行不改。
+
+project: 枫独
+project_root_hint: "D:\\agent\\枫独创新大赛_2026   （已可自动识别，无需再传）"
+gates: [spec, vault, obj, probe, done, lang, cap, root, intent, path, struct, xcheck, vision, decision, doc, behavior, mem]
+
+# 自动识别指纹：这些文件同时存在 ≥2 个，就认定"当前在这个项目里"
+fingerprint:
+  - "01_商业计划书_枫独.md"
+  - "10_经济模型_枫独.xlsx"
+  - "03_路演PPT大纲_枫独.md"
+  - "08_正规公司模型_枫独.md"
+
+# "标准"在这个项目里＝数字单一真相源（经济模型 Excel）+ 比赛口径文档
+spec_sources:
+  - "10_经济模型_枫独.xlsx"
+  - "01_商业计划书_枫独.md"
+  - "03_路演PPT大纲_枫独.md"
+  - "08_正规公司模型_枫独.md"
+
+# 断言：这个项目的"合规"是财务自洽 + 口径一致
+assertions:
+  口径.团队人数: 6
+  口径.比赛赛道: "职教赛道·创意组"
+  文本.禁用词_定妆照: 0
+  文本.禁用词_贷款: 0
+
+vault:
+  dir: "_guard_vault"
+  extensions: [".md", ".xlsx", ".pptx", ".docx", ".py", ".json"]
+  keep: 50
+
+write_paths:
+  - "."
+
+protected:
+  - "**/10_经济模型_枫独.xlsx"
+
+done_checks:
+  - 关键数字与 10_经济模型_枫独.xlsx 一致
+  - spec 断言全绿
+  - 禁用词扫描 0 命中

@@ -1,0 +1,5 @@
+# dsh bundle patch: inserts this plugin into a profile's layer stack.
+# The row `name` is the PACKAGE NAME (Node module resolution), not a relative path.
+- insert:
+    - id: dsh-memory-plugin
+      name: 'dsh-memory-plugin'
