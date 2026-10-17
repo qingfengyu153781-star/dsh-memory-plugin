@@ -157,7 +157,7 @@ export function resolveModel({ cfg, payload, fallback }) {
  */
 export async function orchestrateTurn({
   ctx, payload, decision, query, parsed, isSubagent, callModel, fallbackModel,
-  resolveRoute, sessionKey = '', baseDir = BASE,
+  resolveRoute, sessionKey = '', baseDir = BASE, sessionDomains = [], sessionKeypoints = [],
 }) {
   // ★ 告警/失败计数**按会话隔离**（旧版是进程级共享 ⇒ 会在无关会话里替别的会话报故障）
   const key = String(sessionKey || payload?.agent?.id || '<unknown>')
@@ -171,7 +171,7 @@ export async function orchestrateTurn({
     //   根因：hits 里本来就有 `time_start`（毫秒时间戳），但这里 **map 时被丢掉了**，
     //        渲染时无从判断"这是多久以前的事" ⇒ 无法提示过期。
     //   ⇒ 补上 timeStart/timeEnd，交给 renderBlock 标"距今多久 + 需 reopen 复核"。
-    const candidates = (parsed?.hits || []).map((hit) => ({
+    const recalled = (parsed?.hits || []).map((hit) => ({
       text: hit.text || hit.snippet || '',
       cite: hit.cite || citeOf(hit),
       session_id: hit.session_id,
@@ -183,6 +183,32 @@ export async function orchestrateTurn({
       //   （只把 query 又抄一遍、没有任何具体内容的候选）。
       echo: echoRatio(hit.text || hit.snippet || '', query),
     })).filter((c) => c.text)
+
+    // ★★ 2026-10-17：把**本会话用户自己定过的口径**补进候选池（治"信息丢失"的真病根）★★
+    // 实证（「示例项目甲」2026-10-16）：用户 21:10 定了「把目标改成正确认知 3D 空间」，
+    //   23:33 说「叙述一下总体目标」⇒ 检索（**全库字面相似**）召回的 6 条**全是别会话日志**、
+    //   本会话口径一条没有 ⇒ 判官判"无待办"⇒ **空手 ⇒ 记忆 0 注入** ⇒
+    //   模型把本体目标(3D)写成"落笔式临摹"⇒ 用户指出「3D 部分缺失」。
+    // 病根不是"库丢了"，是**该带进来的没带进来**：泛化 query 必然召不到本会话早前的口径。
+    // 修法：口径候选**排在前面**（判官先看），出处由库给出（真实，R0 反编造校验仍然有效）；
+    //       过一遍回声过滤（query 自己的回声要剔，否则等于把问题当事实注入）。
+    let candidates = recalled
+    try {
+      const own = (Array.isArray(sessionKeypoints) ? sessionKeypoints : []).map((k) => ({
+        text: String(k?.text || '').slice(0, 300),
+        cite: String(k?.cite || ''),
+        session_id: key,
+        score: 1.5,                       // 本项目口径：同等相关时优先于跨会话召回
+        timeStart: k?.time ?? null,
+        timeEnd: null,
+        turn: k?.turn ?? null,
+        own: true,                        // 判官/渲染据此标〔本会话口径·用户原话〕
+        echo: echoRatio(String(k?.text || ''), query),
+      })).filter((c) => c.text && c.cite)
+        .filter((c) => !isEchoOnly(c.text, query))       // 别把 query 自己当"口径"注入
+        .filter((c) => !candidates.some((x) => String(x.cite) === c.cite))
+      if (own.length) candidates = [...own, ...candidates]
+    } catch { /* 失败开放：补不上口径也不阻断编排 */ }
 
     const gate = shouldOrchestrate({
       cfg, turn: Number(payload?.turn ?? 0),
@@ -216,6 +242,9 @@ export async function orchestrateTurn({
       callModel, resolvedProvider: rm.provider, resolvedModel: rm.model,
       baseDir,
       sessionKey: key,     // ★ 2026-10-15(3)：台账须能答"是哪个会话出的问题"
+      // ★ 2026-10-16：本会话**真实活动过**的项目目录（记忆库取数）——
+      //   R4 项目闸判"这条候选是不是本项目的"必须用它（实测：只看用户话取不到线索）
+      sessionDomains,
     })
     // 失败 ⇒ 回落（但要**可见**）：告警文本在这里就生成好，随四态一起交回调用方
     if (!r.ok) return { status: 'failed', error: String(r.error ?? ''), notice: noteFailure(key, r.error) }
@@ -236,6 +265,9 @@ export async function orchestrateTurn({
     return {
       status: 'ok', block: r.block, plan: r.plan, ms: r.ms,
       model: rm.model || r.model, why: gate.why,
+      // ★ 2026-10-16：R4 降级的跨项目条目数（可见性：降级了不许静默）
+      other: (r.plan?.other || []).length,
+      otherProjects: r.plan?.otherProjects || [],
     }
   } catch (e) {
     const msg = e?.message ?? String(e)

@@ -3,7 +3,8 @@
 一个**可安装的最小 DSH 插件骨架**：把 `<WORKSPACE>\dsh-rag-memory\bin\mem.py` 的跨会话记忆检索
 暴露成模型可调用的 `memory_recall` 工具，并在每轮对话的第一个 step 自动把命中的历史片段注入上下文。
 
-- 版本基线：**DSH 运行时 0.2.0-rc.2**（本机 `<DSH-CHECKOUT>`，见 `../research/PLUGIN_API.md`）
+- 版本基线：**DSH 运行时 0.2.1-rc.2**（本机 `<DSH-CHECKOUT>`，见 `../research/PLUGIN_API.md`）
+- 0.3.9 适配 DSH 0.2.1：`memory_hippo_status` 的 `render` 移入 `output`（新版 `ToolOutputDefinition` 契约；旧写法会被宿主整条拒收）；Python 子进程统一 UTF-8（修台账中文乱码）；`local.config.json` 纳入 `files` 白名单（安装副本不再丢本机路径）
 - 零运行时依赖：`index.js` 只 import `node:child_process` / `node:crypto`，**不 import 任何 `@deepseek-ai/*`**
 - 失败开放：mem.py 出错 / 超时 / 不存在 → 不注入，绝不让这一轮对话失败
 

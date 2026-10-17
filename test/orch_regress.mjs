@@ -14,6 +14,9 @@
  *   H 单一真身     装机副本与源码副本 md5 必须一致（防"改一份不生效"）
  */
 import { readFileSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
+// ★ 2026-10-16 修：execFileSync 来自 node:child_process（旧版误从 node:fs 取 ⇒
+//   L 段"测试不得污染生产台账"一直抛 ReferenceError 被 catch 吞掉 ⇒ **假过**）。
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -275,7 +278,7 @@ console.log('\n【M 回声过滤：只按信息增量判，与"是否重复/句�
     `ratio=${echoRatio(A2, Q).toFixed(2)} substantive=${hasSubstantive(A2)}`)
 
   // ③ 与 query 无关的候选 ⇒ 一律放过（不许误杀）
-  const A3 = '技术工作站那边的剧本已经拆到第 7 幕，道具表缺 3 项'
+  const A3 = '示例项目己那边的剧本已经拆到第 7 幕，道具表缺 3 项'
   check('回声·无关候选不误杀', isEchoOnly(A3, Q) === false, '')
   // ④ 短 query：**逐字包含**那条路不生效（<4 字不判，避免误伤）；
   //    但"重合度"那条仍管用 —— 短 query 且候选就是它自己 ⇒ 仍是回声；带具体内容则放过。
@@ -299,6 +302,203 @@ console.log('\n【M 回声过滤：只按信息增量判，与"是否重复/句�
     sessionKey: 'session-x', candidates: [{ text: A2, cite: 'dsh:s1#turn=2', timeStart: Date.now(), echo: 0.12 }],
   })
   check('判官输入·含"与 query 重合 X%"', jr2.includes('与 query 重合'), '')
+}
+
+console.log('\n【N 项目闸：另一个项目的记录不得冒充本项目的「必须常驻的事实」（2026-10-16 根治）】')
+// 实证（用户点名「<用户原话已隐去：另一个项目被错误注入>」）：
+//   2026-10-16 22:45:20 真实注入块（session-examplesession＝「示例项目甲」项目，问"项目已有技术基础及当前研发进度"）
+//   把《示例项目乙》（上游委托项目（内部红线））的《示例报告_20260915》与
+//   `…\示例项目乙_2026\07_测试与性能\_audit_H_示例.md` 放在【必须常驻的事实】标题下。
+//   主模型当场识破（"那是上游委托项目，我不进材料"）—— 但**注入已经发生**；换个没识破的模型就写进材料了。
+{
+  const { projectDomains, projectVerdict } = core
+  const OWN = '我们在做 D:\\agent\\示例项目甲_2026-10\\09_项目意义与应用前景_v0.1.md'
+  const BANXUE = '《示例报告_20260915》（示例项目乙）：120项功能清单已逐项过账 '
+    + 'D:\\agent\\示例项目乙_2026\\07_测试与性能\\_audit_H_示例.md'
+  check('项目闸·指纹抽出"示例项目乙"', projectDomains(BANXUE).some((d) => d.key === '示例项目乙'),
+    JSON.stringify(projectDomains(BANXUE)))
+  check('项目闸·年份后缀归一（示例项目乙_2026 ⇒ 示例项目乙）',
+    projectDomains('D:\\agent\\示例项目乙_2026\\a')[0].key === '示例项目乙', '')
+  // 正斜杠写法也认（两种分隔符都当分隔符）；引号必须留在排除集里
+  check('项目闸·正斜杠写法只取一级目录',
+    projectDomains('D:/agent/示例项目乙_2026/_coldstart_data/x.json')[0].raw === '示例项目乙_2026',
+    JSON.stringify(projectDomains('D:/agent/示例项目乙_2026/_coldstart_data/x.json')))
+  check('项目闸·与本会话项目不相交 ⇒ cross', projectVerdict(BANXUE, OWN).cross === true, '')
+  check('项目闸·用户自己点名该项目 ⇒ 不算 cross（跨项目取经）',
+    projectVerdict(BANXUE, '把示例项目乙的东西学习过来').cross === false, '')
+  check('项目闸·本会话无线索 ⇒ 不下判断（不误杀跨会话召回）', projectVerdict(BANXUE, '').cross === false, '')
+  check('项目闸·同一项目 ⇒ 不误杀',
+    projectVerdict('D:\\agent\\示例项目甲_2026-10\\x.md', OWN).cross === false, '')
+  check('项目闸·无路径候选 ⇒ 不降级（交给判官按相关性判）',
+    projectVerdict('审计H批12项状态：已实现2项（47、53）', OWN).cross === false, '')
+
+  const cfgN = { persistMax: 4, quoteMax: 4, forceOnKeywords: ['之前'], projectGate: true }
+  const cands = [
+    { text: BANXUE, cite: 'dsh:session-examplecite#turn=49', timeStart: Date.now() - 30 * 86400000 },
+    { text: '本项目：09_项目意义与应用前景_v0.1.md 已存在 D:\\agent\\示例项目甲_2026-10\\09_项目意义与应用前景_v0.1.md',
+      cite: 'dsh:session-examplesess#turn=16', timeStart: Date.now() - 600000 },
+  ]
+  const pick = (p, q, cfg2 = cfgN, userText = '项目已有技术基础及当前研发进度') => enforceHardRules(
+    { persist: p, quote: q, drop: [], order: [], reason: '' },
+    { cfg: cfg2, candidates: cands, forceSignal: false, userText, recentTurns: [{ role: 'user', text: OWN }] },
+  )
+  const r1 = pick([{ fact: '《示例报告_20260915》（示例项目乙）', cite: 'dsh:session-examplecite#turn=49' }], [])
+  check('项目闸·跨项目条目被降级、不留在 persist',
+    r1.persist.length === 0 && r1.other.length === 1, JSON.stringify({ p: r1.persist.length, o: r1.other.length }))
+  check('项目闸·降级留痕（flag 可审计）', r1.flags.some((f) => f.includes('R4')), JSON.stringify(r1.flags))
+  check('项目闸·记下"是哪个项目"（真实目录名，可去盘上核）',
+    (r1.otherProjects || []).some((x) => String(x).includes('示例项目乙')), JSON.stringify(r1.otherProjects))
+  const blk1 = renderBlock(r1, { query: '项目已有技术基础及当前研发进度', model: 'm', ms: 1 })
+  check('项目闸·渲染单独成"别的项目"栏 + 强警示',
+    blk1.includes('来自**别的项目**') && blk1.includes('另一项目：示例项目乙'), blk1.split('\n').slice(0, 5).join(' ｜ '))
+  check('项目闸·跨项目条目不得出现在【必须常驻的事实】栏下',
+    !blk1.includes('【必须常驻的事实】'), '')
+  const blkQ = renderBlock(pick([], [{ fact: '《开发进度报告》要点', cite: 'dsh:session-examplecite#turn=49' }]),
+    { query: 'q', model: 'm', ms: 1 })
+  check('项目闸·跨项目的"引用"也一并移入警示栏（不在【原文要点】）',
+    !blkQ.includes('【原文要点'), blkQ.split('\n').slice(0, 5).join(' ｜ '))
+  // ★★ 2026-10-16（第二轮）：**信息不许丢** —— 降级只换标签，条目正文必须仍在块里。
+  //   实证（重启后 22:5x）：我第一版铁律 11 写"另一个项目 ⇒ 默认一律 drop"，
+  //   判官照办把 6 条全丢 ⇒ 空手 ⇒ 调用方只注入一行"本轮不注入正文" ⇒ 用户看到"信息没了"。
+  check('项目闸·降级后条目正文仍在块里（换标签≠丢内容）',
+    blkQ.includes('开发进度报告'), blkQ.split('\n').slice(0, 6).join(' ｜ '))
+  check('项目闸·系统提示禁止整条丢弃（防信息丢失）',
+    /严禁因为/.test(core.SYSTEM_PROMPT) && /整条丢掉/.test(core.SYSTEM_PROMPT), '')
+  check('项目闸·系统提示不再写"默认一律 drop"',
+    !/默认\*\*一律 drop\*\*/.test(core.SYSTEM_PROMPT), '')
+
+  const r2 = pick([{ fact: '本项目：09_项目意义与应用前景_v0.1.md 已存在', cite: 'dsh:session-examplesess#turn=16' }], [])
+  check('项目闸·本项目条目照常进 persist（不误杀）',
+    r2.persist.length === 1 && r2.other.length === 0, JSON.stringify({ p: r2.persist.length, o: r2.other.length }))
+  const r3 = pick([], [{ fact: '示例项目乙的实测清单', cite: 'dsh:session-examplecite#turn=49' }],
+    cfgN, '把示例项目乙的东西学习过来')
+  check('项目闸·用户点名该项目 ⇒ 放行（不降级）',
+    r3.other.length === 0 && r3.quote.length === 1, JSON.stringify({ q: r3.quote.length, o: r3.other.length }))
+  const r4 = pick([{ fact: 'x', cite: 'dsh:session-examplecite#turn=49' }], [], { ...cfgN, projectGate: false })
+  check('项目闸·projectGate=false ⇒ 退回旧行为（可回退）',
+    r4.persist.length === 1 && r4.other.length === 0, JSON.stringify({ p: r4.persist.length, o: r4.other.length }))
+
+  const reqN = buildRequest({
+    cfg: cfgN, userText: '项目已有技术基础及当前研发进度',
+    recentTurns: [{ role: 'user', text: OWN }], forceSignal: false,
+    sessionKey: 'session-examplesession', candidates: cands,
+  })
+  check('项目闸·判官输入含"本会话的项目线索"',
+    reqN.includes('## 本会话的项目线索') && reqN.includes('示例项目甲'), '')
+  check('项目闸·判官输入给跨项目候选打〔⚠ 另一项目〕标', reqN.includes('〔⚠ 另一项目'), '')
+  check('项目闸·判官输入写明"不要整条 drop"（防空手）',
+    reqN.includes('全部 drop') && reqN.includes('信息丢失'), '')
+  check('项目闸·系统提示写明"不得进 persist"', /不得进 persist/.test(core.SYSTEM_PROMPT), '')
+
+  // ── ★ 真实条件（这才是当天那条失败的原样）：用户话里**没有任何路径** ──
+  //   实测：session-examplesession 的 user_text/assistant_text 里一个项目路径都没有
+  //   （路径全在 tool_call/tool_result 里）⇒ 只看用户话 = 闸取不到线索 = 形同不存在。
+  //   补上来自记忆库的「本会话活动目录」后，闸必须照样触发。
+  {
+    const REAL_SD = ['示例项目甲_2026-10', '示例项目丁', '示例项目己', '示例项目戊']
+    const NO_PATH_USER = '项目已有技术基础及当前研发进度'
+    const v = projectVerdict(BANXUE, NO_PATH_USER, REAL_SD)
+    check('项目闸·真实条件（用户话无路径 + 活动目录来自库）⇒ 仍判 cross', v.cross === true, JSON.stringify(v))
+    const r = enforceHardRules(
+      { persist: [{ fact: '《示例报告_20260915》（示例项目乙）', cite: 'dsh:session-examplecite#turn=49' }], quote: [], drop: [], order: [], reason: '' },
+      { cfg: cfgN, candidates: cands, forceSignal: false, userText: NO_PATH_USER,
+        recentTurns: [{ role: 'user', text: NO_PATH_USER }], sessionDomains: REAL_SD },
+    )
+    check('项目闸·真实条件 ⇒ 《示例项目乙》被降级（当天那条就修住了）',
+      r.persist.length === 0 && r.other.length === 1, JSON.stringify({ p: r.persist.length, o: r.other.length }))
+    const rKeep = enforceHardRules(
+      { persist: [{ fact: '本项目：09_项目意义与应用前景_v0.1.md 已存在', cite: 'dsh:session-examplesess#turn=16' }], quote: [], drop: [], order: [], reason: '' },
+      { cfg: cfgN, candidates: cands, forceSignal: false, userText: NO_PATH_USER,
+        recentTurns: [{ role: 'user', text: NO_PATH_USER }], sessionDomains: REAL_SD },
+    )
+    check('项目闸·真实条件 ⇒ 本项目条目照样进 persist（不误杀）',
+      rKeep.persist.length === 1 && rKeep.other.length === 0, JSON.stringify({ p: rKeep.persist.length, o: rKeep.other.length }))
+  }
+
+  // ── 真库取数核对（`mem.py session-domains`）：可选，设 DSH_MEMORY_TEST_SESSION 才跑。
+  //    公开仓不含任何真实会话 id / 真实项目名，因此默认显式跳过（不是"假通过"）。
+  {
+    const sid = process.env.DSH_MEMORY_TEST_SESSION || ''
+    if (!sid) {
+      ok('跳过真库取数核对（未设 DSH_MEMORY_TEST_SESSION）')
+    } else {
+      let sd = null
+      try {
+        const py = process.env.ORCH_PYTHON || 'python'
+        const raw = execFileSync(py, [join(ROOT, '..', '..', 'bin', 'mem.py'),
+          'session-domains', sid, '--json'],
+        { encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' }, timeout: 60000 })
+        sd = JSON.parse(String(raw).trim().split('\n').pop())
+      } catch (e) { sd = { error: String(e?.message || e).slice(0, 80) } }
+      const names = Array.isArray(sd?.domains) ? sd.domains.map((d) => d.name) : []
+      check('真库·session-domains 能返回目录且名字非空',
+        names.length > 0 && names.every((n) => typeof n === 'string' && n.length > 0),
+        JSON.stringify(sd).slice(0, 120))
+    }
+  }
+}
+
+console.log('\n【O 本会话口径候选（2026-10-17：治"该带的没带进来"）】')
+// 实证：「示例项目甲」2026-10-16 用户 21:10 定下「把目标改成正确认知 3D 空间」，
+//   23:33 说「叙述一下总体目标」⇒ 检索（全库字面相似）召回的 6 条**全是别会话日志、本会话口径 0 条**
+//   ⇒ 判官空手 ⇒ 记忆 0 注入 ⇒ 模型把本体目标(3D)写成"落笔式临摹"⇒ 用户指出「3D 部分缺失」。
+{
+  const { buildRequest } = core
+  const oCfg = { persistMax: 4, quoteMax: 4, forceOnKeywords: ['之前'], projectGate: true }
+  const KP = [
+    { text: '现在我的目标转变了从让模型学会剪辑，变成让模型正确认知3d空间、真正理解人类看到的画面，',
+      cite: 'dsh:session-examplesess#turn=2', turn: 2, time: Date.now() - 3600 * 1000 },
+    { text: '叙述总体目标', cite: 'dsh:session-examplesess#turn=26', turn: 26, time: Date.now() },
+  ]
+  // ① 判官输入：口径候选带标 + 写明"优先挑进 persist、不许空手"
+  const rq = buildRequest({
+    cfg: oCfg, userText: '叙述总体目标', recentTurns: [], forceSignal: false,
+    sessionKey: 'session-examplesession',
+    candidates: [{ ...KP[0], own: true }, { text: '别会话的日志', cite: 'dsh:other#turn=1', timeStart: Date.now() }],
+  })
+  check('本会话口径·判官输入带〔本会话口径·用户原话〕标', rq.includes('〔本会话口径·用户原话'), '')
+  check('本会话口径·判官输入写明"优先挑进 persist / 不许空手"',
+    rq.includes('优先把它们挑进 persist') && rq.includes('空手'), '')
+
+  // ② host 级：口径候选进池 ⇒ 判官挑了它 ⇒ **真能被 R0 接受并注入**（这是关键：出处真实）
+  let seen = ''
+  const rkp = await call({
+    query: '叙述总体目标',
+    sessionKeypoints: KP,
+    sessionKey: 'session-examplesession',
+    callModel: async ({ messages }) => {
+      seen = (messages?.[1]?.content?.[0]?.text) || ''
+      return JSON.stringify({
+        persist: [{ fact: '本项目目标：让模型正确认知 3d 空间', cite: 'dsh:session-examplesess#turn=2' }],
+        quote: [], drop: [], order: [], reason: '口径优先',
+      })
+    },
+  })
+  check('本会话口径·进了判官输入（正文可核）', seen.includes('正确认知3d空间'),
+    seen.slice(0, 0) + (seen.includes('〔本会话口径·用户原话') ? '带标' : '无标'))
+  check('本会话口径·query 自己的回声被剔（不当口径注入）', !seen.includes('1. [dsh:session-examplesess#turn=26]'), '')
+  check('本会话口径·判官挑中后**能进注入块**（出处真实、过 R0）',
+    rkp && rkp.status === 'ok' && /必须常驻的事实/.test(rkp.block || '') && /正确认知 3d 空间/.test(rkp.block || ''),
+    JSON.stringify(rkp && { s: rkp.status, b: (rkp.block || '').slice(0, 80) }))
+
+  // ③ 真库取数：本会话口径能取到、且出处是真的（可选，设 DSH_MEMORY_TEST_SESSION 才跑）
+  const sid2 = process.env.DSH_MEMORY_TEST_SESSION || ''
+  if (!sid2) {
+    ok('跳过真库口径取数核对（未设 DSH_MEMORY_TEST_SESSION）')
+  } else {
+    let kp = null
+    try {
+      const py = process.env.ORCH_PYTHON || 'python'
+      const raw = execFileSync(py, [join(ROOT, '..', '..', 'bin', 'mem.py'),
+        'session-domains', sid2, '--json', '--keypoints', '6'],
+      { encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' }, timeout: 60000 })
+      kp = JSON.parse(String(raw).trim().split('\n').pop())
+    } catch (e) { kp = { error: String(e?.message || e).slice(0, 80) } }
+    const kps = Array.isArray(kp?.keypoints) ? kp.keypoints : []
+    check('真库·能取到本会话口径', kps.length > 0, JSON.stringify(kp).slice(0, 140))
+    check('真库·口径带真实出处（dsh:<会话>#turn=N）',
+      kps.every((x) => Number.isFinite(Number(x.turn))), JSON.stringify(kps.map((x) => x.turn)))
+  }
 }
 
 console.log('\n【H 单一真身（防两副本漂移）】')

@@ -39,6 +39,9 @@ export const DEFAULT_CONFIG = {
   //   超过它、且候选没有任何具体内容（数字/路径/标识符/决定口径）⇒ 判为回声，剔除。
   //   0.6 是**可调的判据常量**（不是观测量）：调到 1 等于关掉过滤。
   echoRatioMax: 0.6,
+  // ★ 2026-10-16：**项目闸** —— 另一个项目的记录不得冒充本项目的「必须常驻的事实」。
+  //   false 等于关掉（退回"只靠判官自觉"的旧行为，见 enforceHardRules 的 R4 注释）。
+  projectGate: true,
   debug: false,
 }
 
@@ -224,6 +227,92 @@ export function filterEchoCandidates(candidates, query, { ratioMax = 0.6 } = {})
 
 
 // ---------------------------------------------------------------------------
+// 项目指纹：这条候选是不是「本项目」的事（2026-10-16 立）
+// ---------------------------------------------------------------------------
+/**
+ * 病根（2026-10-16 22:45 实测，用户点名「<用户原话已隐去：另一个项目被错误注入>」）：
+ *   「示例项目甲」项目会话（session-examplesession）问「该项目已有的技术基础与研发进度」，
+ *   编排器把 **《示例项目乙》**（**上游委托项目**，用户明令的红线，禁止进任何材料）
+ *   的《示例报告_20260915》与 `…\示例项目乙_2026\07_测试与性能\_audit_H_示例.md`
+ *   当成**【必须常驻的事实】**注入了 —— 主模型当场识破（"那是上游委托项目，我不进材料"），
+ *   **但注入已经发生**：换一个没识破的模型，它就会被写进本项目的材料。
+ *
+ *   为什么判官没拦住：它**有能力**判跨项目 —— 同一轮的编排理由里，它自己把
+ *   「示例项目丙看板」判成"另一个项目"丢掉了；它缺的是**"本会话是哪个项目"**这个事实
+ *   （旧版判官输入里只有「当前会话 id / 当前时间 / 用户这句 / 候选」，**没有项目维度**）。
+ *
+ * 判据（确定性、可复算）：从文本里抽 `D:\agent\<一级目录>` 形态的**项目指纹**；
+ *   候选的指纹与「**本会话用户自己说过的话**」里的指纹**对不上** ⇒ 另一个项目。
+ *   · 只从**用户话**取本会话指纹（绝不用助手话、更不用注入块）——
+ *     否则助手复述一次"示例项目乙"，就把这个红线项目洗成"本项目"了（实测该会话助手回复里正有这四个字）。
+ *   · 本会话**没有任何指纹** ⇒ **不下判断**（宁可不动，不许误杀正常的跨会话召回）。
+ *   · 用户**自己点名**了那个项目（用于跨项目取经）⇒ 也不算"另一个项目"。
+ */
+// 字符集同时排除两种分隔符与引号/括号 —— 这样才能只取到**一级目录**。
+// （2026-10-16 自查：复演输出里的 `示例项目乙_2026/_coldstart_data` 并**不是**正则漏切，
+//   而是同一条候选里出现了**两个**项目路径，渲染时用 `/` 拼接所致 ⇒ 已改成 `、` 分隔；
+//   引号必须留在排除集里，否则会截出 `_coldstart_data"` 这种带引号的假名。）
+const AGENT_DIR_RE = /[A-Za-z]:[\\/]agent[\\/]([^\s\\/'"`)\]}>，。；：！？,;]+)/gi
+
+/** 目录名归一：去掉结尾年份（`示例项目乙_2026` ⇒ `示例项目乙`），小写。 */
+export function normDomain(raw) {
+  return String(raw || '')
+    .replace(/[_-]?20\d\d(?:[-_]\d\d)?\s*$/, '')
+    .replace(/^[_\-\s]+|[_\-\s]+$/g, '')
+    .toLowerCase()
+}
+
+/** 从任意文本里抽项目指纹：返回 `[{key, raw}]`（去重、按出现顺序，最多 8 个）。 */
+export function projectDomains(text) {
+  const out = []
+  const seen = new Set()
+  const s = String(text ?? '')
+  AGENT_DIR_RE.lastIndex = 0
+  let m
+  while ((m = AGENT_DIR_RE.exec(s)) !== null) {
+    const raw = String(m[1] || '').replace(/[\\/]+$/, '')
+    const key = normDomain(raw)
+    if (!key || seen.has(key)) continue
+    seen.add(key)
+    out.push({ key, raw })
+    if (out.length >= 8) break
+  }
+  return out
+}
+
+/**
+ * 判一条候选文本是不是"另一个项目"的。
+ * @param {string} text         候选文本
+ * @param {string} ownUserText  **用户自己说过的话**（判"用户点名了它"）
+ * @param {Array<string|object>} [allowedDomains]
+ *        本会话**真实活动过的项目目录**（来自记忆库 `mem.py session-domains`，含 tool_call/tool_result）。
+ *        ★ 为什么必须有它（实测推翻"只看用户话"的初版）：本次会 session-examplesession 的
+ *        user_text/assistant_text 里**一个项目路径都没有**，路径全在 tool_call/tool_result 里
+ *        ⇒ 只看用户话 = 永远取不到线索 = 闸形同不存在（"判据量错了对象"）。
+ * @returns {{cross:boolean, domains:Array<{key,raw}>, named?:boolean, noClue?:boolean}}
+ *   cross=true 只在**两边都有证据**且**互不相交**时给出；其余一律 false（保守，不误杀）。
+ */
+export function projectVerdict(text, ownUserText, allowedDomains) {
+  const domains = projectDomains(text)
+  if (!domains.length) return { cross: false, domains: [] }
+  const own = String(ownUserText ?? '')
+  // 用户自己点名了该项目（哪怕没写路径）⇒ 视为"跨项目取经"，放行
+  for (const d of domains) {
+    if (d.raw && own.includes(d.raw)) return { cross: false, domains, named: true }
+    if (d.key && d.key.length >= 3 && own.toLowerCase().includes(d.key)) {
+      return { cross: false, domains, named: true }
+    }
+  }
+  const ownKeys = new Set(projectDomains(own).map((d) => d.key))
+  for (const a of (Array.isArray(allowedDomains) ? allowedDomains : [])) {
+    const k = normDomain(typeof a === 'string' ? a : ((a && (a.key || a.name)) || ''))
+    if (k) ownKeys.add(k)
+  }
+  if (!ownKeys.size) return { cross: false, domains, noClue: true }
+  return { cross: domains.every((d) => !ownKeys.has(d.key)), domains }
+}
+
+// ---------------------------------------------------------------------------
 // 请求组装
 // ---------------------------------------------------------------------------
 
@@ -250,6 +339,20 @@ export const SYSTEM_PROMPT = `你是「注意力编排器」。你不回答用�
 10. ★ **用户重复说同一件事是正常的**。判据只看"候选有没有 query 之外的信息量"，
    **绝不**看"用户这句话短不短、像不像应答、是不是第一次说"。
    同一个问题再问一遍时，只要候选里带着答案（数字/结论/口径），**照常挑选**。
+11. ★★ **"这是不是本项目的事"（2026-10-16 立，防"别人的项目写进我的材料"）**：
+   候选前面标了〔项目:X〕而 X **不在**「## 本会话的项目线索」名单里，或标了〔⚠ 另一项目〕
+   ⇒ 那是**另一个项目的记录**。对它**只准换标签、不准丢内容**：
+   · **不得进 persist** ——「必须常驻的事实」带着最强断言语气，占上它，主模型就会把
+     **别人的项目**写进**本项目的材料**（实证：把上游委托项目的进度报告当"本项目技术基础"注入）；
+   · **放进 quote 即可** —— 渲染层会自动把它归到【⚠ 以下条目来自**别的项目**】栏并标注来源项目，
+     信息保留、语气与位置正确，用户跨项目取经时照样看得到；
+   · ★★ **严禁因为"它是另一个项目"就把候选整条丢掉**。
+     **空手（persist/quote 都留空）＝本轮一条记忆都不注入** = **信息丢失**，
+     比"标签贴错"更贵。实证（2026-10-16 22:5x 重启后）：判官照"默认一律 drop"把 6 条全丢
+     ⇒ 空手 ⇒ 调用方只注入一行"本轮不注入正文" ⇒ 用户看到的就是"另一个会话的信息没了"。
+     **只有"与本轮问题无关 / 只是 query 的回声"才是 drop 的理由**；
+     "属于别的项目"**不是** drop 的理由。
+   · 反过来，**没有〔项目:〕标的候选不要因此降级**（路径可能没写出来），照常按相关性判。
 
 输出契约：
 {
@@ -272,8 +375,22 @@ export function ageText(ms, now = Date.now()) {
   return `${Math.floor(min / 1440)} 天前`
 }
 
-export function buildRequest({ cfg, userText, recentTurns, candidates, taskState, forceSignal, sessionKey }) {
+export function buildRequest({ cfg, userText, recentTurns, candidates, taskState, forceSignal, sessionKey, sessionDomains }) {
   const L = []
+  // ★ 2026-10-16：**本会话的项目线索**有两个来源：
+  //   ① 用户自己说过的话（可判"用户点名了别的项目"）
+  //   ② 记忆库里**本会话真实活动过的项目目录**（`mem.py session-domains`，含 tool_call/tool_result）
+  //      —— 必须有 ②：实测本次会 user/assistant 正文里**一个路径都没有**，只看①等于没有线索。
+  const ownUserText = [String(userText || '')]
+    .concat((recentTurns || [])
+      .filter((m) => m && m.role === 'user')
+      .map((m) => String(m.text || '')))
+    .join('\n')
+  const sessDoms = projectDomains(ownUserText)
+  const libDoms = (Array.isArray(sessionDomains) ? sessionDomains : [])
+    .map((a) => (typeof a === 'string' ? a : ((a && (a.name || a.key)) || '')))
+    .filter(Boolean)
+    .slice(0, 8)
   // ★ 2026-10-15（第六轮）：把**判官需要的环境事实**给它 ——
   //   旧版只给"用户说了什么 + 候选"，于是它把"同一句话在别处的元记录"当成了本轮相关。
   //   现在补：当前会话、当前时间、本轮形态、以及**每条候选距今多久**。
@@ -283,6 +400,33 @@ export function buildRequest({ cfg, userText, recentTurns, candidates, taskState
   if (isAckOnly(userText)) {
     L.push('- 本轮形态：**用户在报告一个已完成的状态**（不是提问/要求）'
       + ' ⇒ 通常**没有任何内容需要常驻**；要核现状请现查，别靠历史。')
+  }
+  L.push('')
+  // ★ 2026-10-16：把"本项目是哪一个"交给判官（旧版完全没有这个维度）
+  L.push('## 本会话的项目线索（判"这条候选是不是本项目的"用）')
+  if (libDoms.length) {
+    L.push(`- 本会话**近期活动过**的项目目录（来自记忆库，含工具调用/结果）：${libDoms.join(' / ')}`)
+  }
+  if (sessDoms.length) {
+    L.push(`- 用户自己提过的项目：${sessDoms.map((d) => d.raw).join(' / ')}`)
+  }
+  if (libDoms.length || sessDoms.length) {
+    L.push('- 候选标了〔项目:X〕而 X **不在这两份名单里** ⇒ 那是**另一个项目**的记录（见铁律 11）。')
+    L.push('- ★ 对这类候选：**只换标签、不丢内容** —— 不得进 persist，但**请放进 quote**'
+      + '（渲染层会自动归到【⚠ 来自别的项目】栏）。**不要因为"它是另一个项目"就全部 drop**：'
+      + '那会让本轮**一条记忆都不注入**（＝信息丢失，实证见铁律 11）。')
+  } else {
+    L.push('- **没有线索**（用户这几轮没提过任何项目路径/项目名，记忆库里也取不到本会话的活动目录）'
+      + ' ⇒ 本次只按"直接服务本轮问题"判，**不许凭"同一主题"挑**。')
+  }
+  // ★ 2026-10-17：本会话口径候选（来自库、出处真实）—— 泛化轮次最该看到的东西
+  if ((candidates || []).some((c) => c && c.own)) {
+    L.push('- ★ 候选里标了〔本会话口径·用户原话〕的，是**用户在本会话里自己定过的口径/方向**。'
+      + '用户问"写目标/意义/方案/总结/说明"这类**需要本项目口径**的轮次，'
+      + '**优先把它们挑进 persist**（这是本轮最该看到的东西）。'
+      + '**一条都不挑（空手）⇒ 本轮记忆为 0 ⇒ 主模型会丢掉本项目自己的口径** —— '
+      + '实证（2026-10-16「示例项目甲」）：用户早前定过"目标是让模型正确认知 3d 空间"，'
+      + '写「总体目标」那轮空手 ⇒ 本体目标被写成别的东西 ⇒ 用户当场指出「3D 部分缺失」。')
   }
   L.push('')
   L.push('## 用户这一轮说')
@@ -311,7 +455,13 @@ export function buildRequest({ cfg, userText, recentTurns, candidates, taskState
     const age = ageText(c.timeStart ?? c.time_start, now)
     // ★ 第八轮：把"与 query 的重合度"也标出来 —— 判官据此识别"回声候选"
     const er = c.echo != null ? `〔与 query 重合 ${Math.round(Number(c.echo) * 100)}%〕` : ''
-    L.push(`${i + 1}. [${cite}] 〔距今 ${age}〕${er} ${String(c.text || '').replace(/\s+/g, ' ').slice(0, 300)}`)
+    // ★ 2026-10-16：把"这条属于哪个项目"标出来（判官据此执行铁律 11）
+    const pv = projectVerdict(c.text, ownUserText, sessionDomains)
+    const ptag = pv.domains.length ? `〔项目:${pv.domains.map((d) => d.raw).join('、')}〕` : ''
+    const xtag = pv.cross ? '〔⚠ 另一项目 ⇒ 不得进 persist〕' : ''
+    // ★ 2026-10-17：本会话**用户自己定过的口径**（出处真实）—— 这是"最该常驻"的一类
+    const otag = c.own ? '〔本会话口径·用户原话 ⇒ 优先〕' : ''
+    L.push(`${i + 1}. [${cite}] 〔距今 ${age}〕${er}${ptag}${xtag}${otag} ${String(c.text || '').replace(/\s+/g, ' ').slice(0, 300)}`)
   })
   L.push('')
   L.push('## 你的输出上限')
@@ -367,7 +517,7 @@ export function parsePlan(raw, { cfg = DEFAULT_CONFIG } = {}) {
 // 兜底硬规则
 // ---------------------------------------------------------------------------
 
-export function enforceHardRules(plan, { cfg, candidates, forceSignal, userText }) {
+export function enforceHardRules(plan, { cfg, candidates, forceSignal, userText, recentTurns, sessionDomains }) {
   /**
    * 时间表的**规范键**：把任意出处写法归一成 `<sid>#<turn>`。
    * 用 `function` 声明 ⇒ 提升，可以在下面的建表循环里先调用（避免 const 的 TDZ）。
@@ -401,6 +551,9 @@ export function enforceHardRules(plan, { cfg, candidates, forceSignal, userText 
     //   而它直接决定 R2 兜底会不会被触发（见下方 R2 注释）。
     rejectedCites: [],
     empty: false,
+    // ★ 2026-10-16：被 R4 从 persist 降级下来的**跨项目**条目（信息不丢，但不冒充本项目事实）
+    other: [],
+    otherProjects: [],
   }
 
   // ★ 2026-10-04：给每条补上**时间戳**（渲染时要标"距今多久"）。
@@ -635,7 +788,68 @@ export function enforceHardRules(plan, { cfg, candidates, forceSignal, userText 
     if (added > 0 && !out.flags.includes('R1:强制常驻(回看信号)')) out.flags.push('R1:强制常驻(回看信号)')
   }
 
-  if (out.persist.length === 0 && out.quote.length === 0) {
+  // ══════════════════════════════════════════════════════════════════════
+  // ★★ R4（2026-10-16）：**跨项目条目不得冒充本项目的「必须常驻的事实」** ★★
+  // ──────────────────────────────────────────────────────────────────────
+  // 实证（用户点名）：2026-10-16 22:45:20，session-examplesession（「示例项目甲」项目）问
+  //   「该项目已有的技术基础与研发进度」，注入块把 **《示例项目乙》**（上游委托项目（内部红线））
+  //   的《示例报告_20260915》与 `…\示例项目乙_2026\07_测试与性能\_audit_H_示例.md`
+  //   放在【必须常驻的事实】标题下 ⇒ 主模型当场识破并声明"不用它"，**但注入已经发生**。
+  //   根因：判官**有能力**判跨项目（同轮它把"示例项目丙看板"判成另一个项目丢掉了），
+  //        缺的是"本会话是哪个项目"这个事实 ⇒ 本轮已在判官输入里补上线索 + 铁律 11。
+  //   本段是**代码级兜底**：判官没照铁律做（或被提示词忽略）时，代码把跨项目的 persist
+  //   条目**降级**到 `other`（渲染成"来自别的项目"的警示栏），**绝不留在"必须常驻"里**。
+  //   · 保守：只在"候选有项目指纹 且 本会话用户话里有指纹 且 两边不相交"时才降级；
+  //   · 用户自己点名过该项目 ⇒ 不降级（跨项目取经是正当需求，实证：用户常问"别的项目里…"）；
+  //   · 闸本身出异常 ⇒ **留 flag**（不静默），且不阻断注入。
+  // ══════════════════════════════════════════════════════════════════════
+  if (cfg.projectGate !== false) {
+    try {
+      const ownUserText = [String(userText || '')]
+        .concat((recentTurns || [])
+          .filter((m) => m && m.role === 'user')
+          .map((m) => String(m.text || '')))
+        .join('\n')
+      const vmap = new Map()
+      for (const c of (candidates || [])) {
+        const cite = c && (c.cite || c.session_id)
+        if (!cite) continue
+        const v = projectVerdict(c?.text || '', ownUserText, sessionDomains)
+        if (v.domains.length) { const k = tkey(cite); if (k) vmap.set(k, v) }
+      }
+      if (vmap.size) {
+        const stillPersist = []
+        const demoted = []
+        for (const x of out.persist) {
+          const v = x && vmap.get(tkey(x.cite))
+          if (v && v.cross) {
+            demoted.push({ ...x, otherProject: true, domains: v.domains.map((d) => d.raw) })
+          } else stillPersist.push(x)
+        }
+        out.persist = stillPersist
+        // quote 里的跨项目条目也**移出**【原文要点】⇒ 统一进"别的项目"警示栏（信息不丢、位置分明）
+        const stillQuote = []
+        for (const x of out.quote) {
+          const v = x && vmap.get(tkey(x.cite))
+          if (v && v.cross) {
+            demoted.push({ ...x, otherProject: true, domains: v.domains.map((d) => d.raw) })
+          } else stillQuote.push(x)
+        }
+        out.quote = stillQuote
+        if (demoted.length) {
+          out.other = [...out.other, ...demoted]
+          const names = [...new Set(demoted.flatMap((x) => x.domains || []))].slice(0, 4)
+          out.otherProjects = [...new Set([...out.otherProjects, ...names])]
+          out.flags.push(`R4:降级${demoted.length}条跨项目条目（不当"必须常驻的事实"）`)
+        }
+      }
+    } catch (e) {
+      // 不许静默：闸坏了要在台账里看得见（否则就是"看起来正常"的那类病）
+      out.flags.push(`R4:项目闸异常(${String(e?.message ?? e).slice(0, 40)})`)
+    }
+  }
+
+  if (out.persist.length === 0 && out.quote.length === 0 && out.other.length === 0) {
     // ★★ 2026-10-15（第二轮根治）：**不再把"检索最高分的一条"冒充成「必须常驻的事实」** ★★
     //
     // 旧行为（实测 80/307 条历史记录走过这条路）：
@@ -668,13 +882,15 @@ export function renderBlock(plan, { query, model, ms }) {
   const persist = Array.isArray(p.persist) ? p.persist : []
   const quote = Array.isArray(p.quote) ? p.quote : []
   const drop = Array.isArray(p.drop) ? p.drop : []
+  const other = Array.isArray(p.other) ? p.other : []
   const order = Array.isArray(p.order) && p.order.length ? p.order : ['persist', 'quote', 'recent', 'task']
   const flags = Array.isArray(p.flags) ? p.flags : []
 
   const L = []
   L.push(`<attention_orchestration source="dsh-memory-plugin" model="${String(model || '?')}">`)
   L.push(`query: ${String(query || '').slice(0, 120)}`)
-  L.push(`编排耗时: ${ms}ms｜常驻 ${persist.length}｜引用 ${quote.length}｜丢弃 ${drop.length}`)
+  L.push(`编排耗时: ${ms}ms｜常驻 ${persist.length}｜引用 ${quote.length}｜丢弃 ${drop.length}` +
+    (other.length ? `｜另一项目 ${other.length}` : ''))
   if (flags.length) L.push(`硬规则: ${flags.join(' / ')}`)
   if (p.reason) L.push(`编排理由: ${p.reason}`)
   L.push('')
@@ -690,11 +906,22 @@ export function renderBlock(plan, { query, model, ms }) {
       L.push('')
     }
   }
+  // ★ 2026-10-16：跨项目条目**单独成栏 + 强警示**（不藏在"必须常驻"里，也不静默丢掉）。
+  //   实证见 enforceHardRules 的 R4 段（把老师项目的进度报告当"本项目技术基础"注入）。
+  if (other.length) {
+    L.push('【⚠ 以下条目来自**别的项目**（不是本项目的记录）】')
+    L.push('（除用户本轮**明确点名**那个项目外，不要用它；**更不许写进本项目的材料/交付物**。）')
+    for (const x of other) {
+      const who = Array.isArray(x.domains) && x.domains.length ? x.domains.join('、') : '未知'
+      L.push(`· ${x.fact}${ageTag(x)}　〔另一项目：${who}〕\n  出处：${x.cite}`)
+    }
+    L.push('')
+  }
   // ★ 2026-10-04：过期提醒（用户点名）
   //   起因：编排器注入「重启后实测 read_image 失败，未声明图像输入」，
   //        而那条**当天已修好** ⇒ 把过期事实当现况喂进上下文。
   //   做法：只要**有任何一条**注入了时间，就统一加一句"先 reopen 再引用"。
-  const hasAge = [...persist, ...quote].some((x) => x && (x.timeStart != null || x.ageMs != null))
+  const hasAge = [...persist, ...quote, ...other].some((x) => x && (x.timeStart != null || x.ageMs != null))
   if (hasAge) {
     L.push('⚠ **时效提示**：上面标了「距今 …」的条目是**历史记录**，不是现况。')
     L.push('   凡涉及"能不能用/通不通/有没有修好"这类**状态判断**，')
@@ -844,6 +1071,10 @@ export async function orchestrate(o) {
 
   const plan = enforceHardRules(parsed.plan, {
     cfg: o.cfg, candidates: o.candidates, forceSignal, userText: o.userText,
+    // ★ 2026-10-16：R4 要判"另一个项目"，必须先知道"本会话是哪个项目"
+    //   （recentTurns＝用户话；sessionDomains＝记忆库里本会话真实活动过的目录）
+    recentTurns: o.recentTurns,
+    sessionDomains: o.sessionDomains,
   })
   const ms = Date.now() - t0
   // ★ 2026-10-15（第二轮）：编排器**空手**（判"没有相关的"）⇒ 不出块、由调用方回落普通召回。
@@ -853,6 +1084,7 @@ export async function orchestrate(o) {
       session: sess, outcome: 'empty', ms, model: o.resolvedModel, forceSignal,
       candidates: (o.candidates || []).length,
       persist: 0, quote: 0, drop: plan.drop.length,
+      other: (plan.other || []).length, otherProjects: plan.otherProjects || [],
       flags: plan.flags, reason: plan.reason,
       rejectedCites: plan.rejectedCites,
       dropHead: plan.drop.slice(0, 5).map((s) => String(s).slice(0, 80)),
@@ -864,6 +1096,9 @@ export async function orchestrate(o) {
     session: sess, outcome: 'ok', ms, model: o.resolvedModel, forceSignal,
     candidates: (o.candidates || []).length,
     persist: plan.persist.length, quote: plan.quote.length, drop: plan.drop.length,
+    // ★ 2026-10-16：R4 降级的跨项目条目数 + 是哪些项目（可审计：宁可留痕、不许静默）
+    other: (plan.other || []).length,
+    otherProjects: plan.otherProjects || [],
     flags: plan.flags, reason: plan.reason,
     cites: [...plan.persist, ...plan.quote].map((x) => x.cite).slice(0, 12),
     // ★ 留痕：被 R0 丢掉的出处（有界）—— 下次再触发 R2 时，能直接看到模型写了什么
