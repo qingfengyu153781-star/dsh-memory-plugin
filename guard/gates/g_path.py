@@ -377,7 +377,7 @@ def demo(cfg: ProjectConfig) -> int:
     # ★ 2026-10-04 新增：幻影路径的**形态**负例（原来只认两个字面量）
     print()
     print("  ── R-25 幻影路径形态（原判据只认 /d/agent、/c/Users 两个字面量）──")
-    for c_ in ("ls /d/agent", "ls /D/agent", "cat /d/Temp/x.txt", "ls /mnt/d/agent"):
+    for c_ in ("ls /d/agent", "ls /D/agent", "cat /d/Temp/x.txt", "ls /mnt/d/agent"):  # hygiene-allow: 本闸自证夹具——示例必须带本机形态
         neg(f"R-25 幻影写法：{c_}", (lambda q: (lambda: g.check_phantom(q)))(c_), "R-25")
 
     # ★ 2026-10-04 新增：开关写在**注释**里不算开关（原实现会误判为"有开关"）

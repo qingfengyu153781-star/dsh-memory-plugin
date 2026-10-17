@@ -89,12 +89,23 @@ RULES = [
         r"(?:[_-][a-z0-9]+)*\s*[:=]\s*['\"](?!https?://)[^'\"\s]{8,}['\"]")),
     # ★★ 修 ①：`{1,2}` 必须给——源码里的路径是**转义形态**（`<盘符>:\\<工作区>\\`），
     #    只写单反斜杠会整类漏掉（2026-10-16 实测：满仓本机路径报 0 命中）。
-    ("PATH-WIN", "本机绝对路径（盘符+用户/工作区段，含转义形态）", re.compile(
-        r"[A-Za-z]:[\\/]{1,2}(?:Users|agent|deepseekzmd)[\\/]{1,2}", re.I)),
+    # ★★ 2026-10-17 补：`{0,2}` —— 覆盖 **盘符相对写法** `C:Users\名\…`  # hygiene-allow: 规则说明字面量（本器就是判这类路径的）
+    #    （Windows 语义上它相对"该盘当前目录"，但字面仍暴露用户名/工作区名；
+    #     实测 OpenAI/旧文档里偶见此形态；反例 `C:/Users/test/evil` 仍由合成用户名放行）。
+    ("PATH-WIN", "本机绝对路径（盘符+用户/工作区段，含转义与盘符相对形态）", re.compile(
+        r"[A-Za-z]:[\\/]{0,2}(?:Users|agent|deepseekzmd)[\\/]{1,2}", re.I)),
     ("PATH-CYG", "MSYS 盘符路径", re.compile(r"/cygdrive/[a-z]/", re.I)),
-    # ★★ 2026-10-16 补：**WSL 盘符路径** `/mnt/c/…` —— 与 `/cygdrive/c/…` 同族，同为
+    # ★★ 2026-10-16 补：**WSL 盘符路径** `/mnt/c/…` —— 与 `/cygdrive/c/…` 同族，同为  # hygiene-allow: 规则示例字面量
     #   "本机目录结构"的暴露面（实测：中立夹具上原规则整类漏抓）。
     ("PATH-WSL", "WSL 盘符路径", re.compile(r"/mnt/[a-z]/", re.I)),
+    # ★★ 2026-10-17 补（Windows-only 范围裁决后的 Windows 面补全）：
+    #   **UNC 共享路径**里若带本机语义段（`\\<server>\<share>\Users\…` 或 `…\agent\…`），
+    #   泄露的是内网服务器名/共享名 —— 与盘符路径同族的"本机目录结构"暴露面。
+    #   刻意收窄：只认 share 之后紧跟 `Users|agent|deepseekzmd` 的形态；
+    #   纯 `\\server\share` 的通用文档写法不报（另见 PATH_UNC_SYNTHETIC 的占位名放行）。
+    ("PATH-UNC", "UNC 共享路径（带本机语义段）", re.compile(
+        r"\\\\[A-Za-z0-9][A-Za-z0-9._-]{0,62}\\[A-Za-z0-9$][A-Za-z0-9$._-]{0,62}"
+        r"\\(?:Users|agent|deepseekzmd)[\\/]", re.I)),
     # ★★ 2026-10-16 补：**指向本机私有记录的指针**也算泄露。
     #   起因：卫生扫描全绿之后，仓里仍留着本机会话 id 与 DB 序号 —— 它们不含凭据、
     #   不是路径，却**指向私有记录**。（用户原话那一类无法用正则判，见 README §7。）
@@ -160,6 +171,10 @@ MAIL_OK_DOMAINS = ("example.com", "example.org", "example.net", "test.local", "i
 #: 我们对齐该口径 ⇒ 消掉中立夹具上 1 例误报，且**不丢真形态**（真名不在此列）。
 PATH_SYNTHETIC_USERS = re.compile(
     r"(?i)[\\/]users[\\/](?:test|user|example|foo|bar|someone|username|your[-_]?name)[\\/]")
+
+#: ★★ 2026-10-17 补：UNC 的**占位服务器名**（文档里的通用写法，不是内网机器）
+PATH_UNC_SYNTHETIC_TOKENS = ("\\\\server\\", "\\\\example\\", "\\\\localhost\\",
+                             "\\\\host\\", "\\\\fileserver\\")
 
 MAX_EXCERPT = 120
 
@@ -298,6 +313,10 @@ def scan_file(path: Path, *, raw: bool = False, ignore_rules: tuple = (),
                     continue
                 if rule_id == "PATH-WIN" and PATH_SYNTHETIC_USERS.search(line):
                     continue                       # 合成用户名（test/user/example…）不是本机结构
+                if rule_id == "PATH-UNC" and (
+                        any(t in line.lower() for t in PATH_UNC_SYNTHETIC_TOKENS)
+                        or PATH_SYNTHETIC_USERS.search(line)):
+                    continue                       # 占位服务器名 / 合成用户名：文档写法，非内网机器
                 if rule_id.startswith("CRED-") and any(
                         p in token.lower() for p in PLACEHOLDER_PATS):
                     continue                       # 占位符 / 测试假值，正当
@@ -323,12 +342,23 @@ def scan_file(path: Path, *, raw: bool = False, ignore_rules: tuple = (),
 
 
 def scan(paths: list[str], *, raw: bool = False, ignore_rules: tuple = (),
-         forbidden: tuple | None = None, tracked_only: bool = False) -> dict:
+         forbidden: tuple | None = None, tracked_only: bool = False,
+         path_rules: bool = True) -> dict:
+    """扫一组路径。
+
+    ★ 两个"面"参数（2026-10-17 单源收敛时加的）：
+      · `forbidden=`：项目专有名表；传 `()` = **不启用 PROJ-NAME**（"别的项目名"只对
+        **我们自己的公开仓**成立；对"比赛/答辩材料"这类对外面，材料里出现自己的项目名
+        是正当的 ⇒ 由调用方决定，不在这里猜）。
+      · `path_rules`：是否启用 `RT-*` 路径级规则（台账/备份整类不进对外面）。同样只对
+        **仓发布面**成立；对"交付目录"面，`.bak` 是噪音不是交付物 ⇒ 调用方可关。
+    """
     names = tuple(load_forbidden() if forbidden is None else forbidden)
     files = _tracked_files(paths) if tracked_only else _iter_files(paths)
     hits: list[dict] = []
     for f in files:
-        hits.extend(scan_path_rules(f))            # ★ 先判路径级（整类副产物；**噪音也算**）
+        if path_rules:
+            hits.extend(scan_path_rules(f))        # ★ 先判路径级（整类副产物；**噪音也算**）
         if _is_noise(f.name):
             continue                               # 内容不扫（避免噪音淹没真命中）
         hits.extend(scan_file(f, raw=raw, ignore_rules=ignore_rules, forbidden=names))
@@ -345,6 +375,7 @@ def scan(paths: list[str], *, raw: bool = False, ignore_rules: tuple = (),
         "raw": raw,
         "forbidden_names": len(names),
         "tracked_only": tracked_only,
+        "path_rules": path_rules,
     }
 
 
@@ -415,8 +446,36 @@ SELFTEST_CASES = [
     ("WSL /mnt/c 盘符路径（原整类漏抓）", "s.txt",
      'p = "/mnt/' + 'c/Users/someone/work"\n', "PATH-WSL", False),
     #   反例：**合成用户名**是他们明写放行的良性写法 ⇒ 不该误报（对齐他们的口径）
-    ("合成用户名 C:/Users/test（不误报）", "t.txt",
-     'p = "C:/Users/' + 'test/evil"\n', None, False),
+    ("合成用户名 C:/Users/test（不误报）", "t.txt",  # hygiene-allow: 夹具字面量
+     'p = "C:/Users/' + 'test/evil"\n', None, False),  # hygiene-allow: 夹具字面量（负例必须带该形态）
+
+    # ★★ 2026-10-17 补：**Windows 面矩阵**（用户裁决：本项目只对 Windows 取数/主张；
+    #   Linux/macOS/WSL/cygwin 形态继续留在规则里，但**不在本轮验证与主张范围**）。
+    # 轴一 = 形态；轴二 = Windows 语义（大小写不敏感 / 正反斜杠等价 / 8.3 短名 /
+    #   盘符相对 / 长路径前缀 / 末尾斜杠 / UNC 服务器名）。
+    # 所有样本都用**字符串拼接**写，否则本器扫自己源码时会命中（与凭据夹具同一手法）。
+    ("Win 形态：正斜杠 + 中文用户名", "u1.txt",
+     'p = "C:/' + 'Users/张三/work/a.txt"\n', "PATH-WIN", False),
+    ("Win 语义：小写盘符/目录 + 反斜杠（大小写不敏感）", "u2.txt",
+     'p = "c:' + '\\users\\张三\\work"\n', "PATH-WIN", False),
+    ("Win 形态：末尾反斜杠", "u3.txt",
+     'p = "D:' + '\\agent\\out\\"\n', "PATH-WIN", False),
+    ("Win 形态：长路径前缀 \\\\?\\C:\\", "u4.txt",
+     'p = "\\\\?\\C:' + '\\Users\\张三\\a"\n', "PATH-WIN", False),
+    ("Win 语义：8.3 短名 FURONG~1", "u5.txt",
+     'p = "C:' + '\\Users\\FURONG~1\\a"\n', "PATH-WIN", False),
+    ("Win 形态：盘符相对 C:Users\\（无分隔符）", "u6.txt",  # hygiene-allow: 用例标题字面量（负例必须带该形态）
+     'p = "C:' + 'Users\\张三\\a"\n', "PATH-WIN", False),
+    ("Win 形态：UNC 带本机语义段 \\\\srv01\\share\\Users\\", "u7.txt",
+     'p = "\\\\' + 'srv01\\share\\Users\\张三\\a"\n', "PATH-UNC", False),
+    #   反例：UNC 占位服务器名 + 合成用户名 ⇒ 文档通用写法，不该误报
+    ("Win 反例：UNC 占位 \\\\server\\share\\Users\\test（不误报）", "u8.txt",
+     'p = "\\\\' + 'server\\share\\Users\\test\\a"\n', None, False),
+    #   反例：环境变量模板不是"本机绝对路径字面量"⇒ 不该误报
+    ("Win 反例：%USERPROFILE% 模板（不误报）", "u9.txt",
+     'p = "%USERPROFILE%' + '/work/a.txt"\n', None, False),
+    ("Win 反例：$env:USERPROFILE 模板（不误报）", "u10.txt",
+     'p = "$env:USERPROFILE' + '/work/a.txt"\n', None, False),
 ]
 
 

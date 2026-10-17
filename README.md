@@ -282,7 +282,7 @@ dsh-memory-plugin/
 ```
 python guard/guard_cli.py selftest                    # 38 道闸 → 全部通过
 python guard/tools/public_hygiene_scan.py . --tracked # 118 个已跟踪文件 → 无命中
-python guard/tools/public_hygiene_scan.py --selftest  # 仪器自证 14/14
+python guard/tools/public_hygiene_scan.py --selftest  # 仪器自证 33/33（含 10 条 Windows 面矩阵）
 npm test                                              # 79 passed / 0 failed
 python guard/gates/g_integ.py --changed "<guard 下任一文件>"   # 3 项集成自动跑，全绿
 ```
