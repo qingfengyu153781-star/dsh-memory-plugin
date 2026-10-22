@@ -421,6 +421,25 @@ export async function importContinuityFromSessions(baseDir, sessionIds = [], { p
   // ★ 必须把 memBase 传下去：否则列表来自错误的目录 ⇒ byNorm 为空 ⇒
   //   每个 id 都落进 skippedNoProject ⇒ imported 恒为 0（假绿）。
   const listed = await listContinuitySessions(baseDir, memBase)
+  // ★★ 2026-10-22 修（发布面实测抓到）：列表取失败时**不能**当成"查不到工作区"。
+  //   原逻辑：listed 为空 ⇒ byNorm 为空 ⇒ 每个 id 都落进 skippedNoProject ⇒
+  //   返回 `{imported:0, scanned:0, skippedNoProject:N}` —— 界面上读作
+  //   "这些对话没有工作区"，而真相是**列表根本没取到**。两种情况的修法完全不同
+  //   （一个去勾对话，一个去修宿主），长得一样就等于让人无从下手。
+  //   ⇒ 列表不可用就明确报错，并带原始原因。
+  if (!listed || listed.ok === false || !Array.isArray(listed.sessions) || listed.sessions.length === 0) {
+    return {
+      ok: false,
+      imported: 0,
+      autoConfirmed: 0,
+      scanned: 0,
+      skippedNoProject: 0,
+      goalLocked: false,
+      error: `取会话列表失败，无法确定来源工作区：${(listed && listed.error) || '列表为空'}`,
+      note: '这是宿主侧读取记忆库失败，不是"这些对话没有工作区"。',
+    }
+  }
+
   // ★ 2026-10-22：按**归一键**建表（`session-<uuid>` 与裸 `<uuid>` 视为同一对话），
   //   并把请求里的 id 换成列表里的**规范写法** —— 这样出处（cite）与库内 session_id 一致，
   //   不会出现"导入了但按 id 查不到"。
@@ -503,17 +522,18 @@ export function listContinuitySessions(baseDir, memBase = baseDir) {
     //   原写法 kill 之后 `close` 事件的 code 是 null、stderr 往往为空 ⇒ 返回
     //   `{ok:false, error:''}`：调用方只看到"失败但不知道为什么"，界面上还会退化成
     //   "没有会话"的空下拉（静默失效）。现在记一个明确的超时标记。
-    //   同时把上限从 15s 提到 30s：整套测试并发跑时实测有超过 15s 的情况，
-    //   15s 会把"慢"误判成"坏"。
+    //   同时把上限从 15s 提到 60s：整套测试并发跑时实测**超过 30s** 的情况（发布面自测抓到过），
+    //   15s/30s 都会把"慢"误判成"坏"。这里宁可等久一点，也不要把可用实例判成坏的。
+    const LIST_TIMEOUT_MS = 60000
     let timedOut = false
     const timer = setTimeout(() => {
       timedOut = true
       try { child.kill() } catch { /* noop */ }
-    }, 30000)
+    }, LIST_TIMEOUT_MS)
     child.on('close', (code, signal) => {
       clearTimeout(timer)
       if (timedOut) {
-        return resolve({ ok: false, error: `mem.py sessions 超过 30s 未返回（已终止）；${err.slice(0, 300)}`, sessions: [], timedOut: true })
+        return resolve({ ok: false, error: `mem.py sessions 超过 ${LIST_TIMEOUT_MS / 1000}s 未返回（已终止）；${err.slice(0, 300)}`, sessions: [], timedOut: true })
       }
       if (code !== 0) {
         return resolve({ ok: false, error: (err.slice(0, 500) || `mem.py sessions 退出码 ${code}${signal ? ' signal=' + signal : ''}`), sessions: [] })
