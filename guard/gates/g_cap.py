@@ -201,7 +201,7 @@ class CapabilityGate:
         missed = [e for e in expected if not any(e.lower() in u or u in e.lower() for u in used_l)]
 
         # ★★ 2026-10-04 新增（治"扫描范围不全说没有"长在闸自己身上 · 病根 5）：
-        #   实测：任务「一条算本月开支与补贴的请求」命中了财务/Excel 触发词，
+        #   实测：一条"算本月开支与补贴"的请求命中了财务/Excel 触发词，
         #   但本机能力清单里**根本没有任何 excel/office 类条目** ⇒ expected=[] ⇒ 静默放行。
         #   而"本机没装该能力"与"这个任务不需要能力"是**两回事**：
         #   前者要报"能力缺口"（据此去补装/换路子），后者才该放行。

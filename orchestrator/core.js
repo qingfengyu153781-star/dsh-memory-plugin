@@ -621,14 +621,14 @@ export function enforceHardRules(plan, { cfg, candidates, forceSignal, userText,
   // ★★ 2026-10-04 修复（"编排器每次都被判空手"的真因）★★
   //   原实现是**纯字符串全等**：`known.has(String(x.cite))`。
   //   实测（node 直跑 core.js，8 种模型常见写法）：
-  //     ✓保留 原样              "dsh:session-bbbb#turn=7"
-  //     ✗丢弃 去 dsh: 前缀       "session-bbbb#turn=7"
-  //     ✗丢弃 去 #turn          "dsh:session-bbbb"
-  //     ✗丢弃 方括号包裹          "[dsh:session-bbbb#turn=7]"
+  //     ✓保留 原样              "dsh:session-aaaa#turn=7"
+  //     ✗丢弃 去 dsh: 前缀       "session-aaaa#turn=7"
+  //     ✗丢弃 去 #turn          "dsh:session-aaaa"
+  //     ✗丢弃 方括号包裹          "[dsh:session-aaaa#turn=7]"
   //     ✗丢弃 序号               "1"
   //     ✗丢弃 完整 session_id     "dsh:<会话>-...#turn=7"
-  //     ✗丢弃 尾部空格            "dsh:session-bbbb#turn=7 "
-  //     ✗丢弃 turn 写 T          "dsh:session-bbbb#T=7"
+  //     ✗丢弃 尾部空格            "dsh:session-aaaa#turn=7 "
+  //     ✗丢弃 turn 写 T          "dsh:session-aaaa#T=7"
   //   ⇒ **8 种里只有 1 种通过**。模型稍一改写就被判"编造"全丢
   //     ⇒ out.persist 归零 ⇒ 触发 R2 兜底 ⇒ **记录里 4/4 全是"空手兜底"**，
   //     模型那 4.4–6.7 秒的真实判断**一条都没进上下文**。
