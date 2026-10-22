@@ -499,10 +499,25 @@ export function listContinuitySessions(baseDir, memBase = baseDir) {
     let out = ''; let err = ''
     child.stdout.on('data', (x) => { out += x })
     child.stderr.on('data', (x) => { err += x })
-    const timer = setTimeout(() => { try { child.kill() } catch {} }, 15000)
-    child.on('close', (code) => {
+    // ★★ 2026-10-22：超时**必须留下原因**。
+    //   原写法 kill 之后 `close` 事件的 code 是 null、stderr 往往为空 ⇒ 返回
+    //   `{ok:false, error:''}`：调用方只看到"失败但不知道为什么"，界面上还会退化成
+    //   "没有会话"的空下拉（静默失效）。现在记一个明确的超时标记。
+    //   同时把上限从 15s 提到 30s：整套测试并发跑时实测有超过 15s 的情况，
+    //   15s 会把"慢"误判成"坏"。
+    let timedOut = false
+    const timer = setTimeout(() => {
+      timedOut = true
+      try { child.kill() } catch { /* noop */ }
+    }, 30000)
+    child.on('close', (code, signal) => {
       clearTimeout(timer)
-      if (code !== 0) return resolve({ ok: false, error: err.slice(0, 500), sessions: [] })
+      if (timedOut) {
+        return resolve({ ok: false, error: `mem.py sessions 超过 30s 未返回（已终止）；${err.slice(0, 300)}`, sessions: [], timedOut: true })
+      }
+      if (code !== 0) {
+        return resolve({ ok: false, error: (err.slice(0, 500) || `mem.py sessions 退出码 ${code}${signal ? ' signal=' + signal : ''}`), sessions: [] })
+      }
       try {
         const parsed = JSON.parse(out)
         const sessions = (Array.isArray(parsed) ? parsed : parsed.sessions || parsed.rows || [])

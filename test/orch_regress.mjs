@@ -513,11 +513,20 @@ console.log('\n【O 本会话口径候选（2026-10-17：治"该带的没带进�
 }
 
 console.log('\n【H 单一真身（防两副本漂移）】')
-for (const f of ['lib/index.js', 'orchestrator/core.js', 'orchestrator/host.js', 'index.js', 'package.json']) {
-  const inst = join(INSTALLED, f)
-  if (!existsSync(inst)) { ok(`跳过（装机目录不存在）${f}`); continue }
-  const a = md5(inst), b = md5(join(ROOT, f))
-  check(`md5 一致 ${f}`, a === b, `装机=${a} 源码=${b}`)
+// ★ 2026-10-22：这条判据的前提是「被测源码 == 装机目录」。在 `git archive` 解包出来的
+//   发布面里跑测试时，ROOT 是归档副本、INSTALLED 仍指向真实装机目录 ⇒ 必然不一致，
+//   那不是"两个副本漂移"，是**判据用错了对象**（会把干净的发布面报成失败）。
+//   所以先确认"我是不是那个被装机的目录"：只有两者是同一份时，这条才有意义。
+const isInstalledCopy = existsSync(INSTALLED) && md5(join(INSTALLED, 'package.json')) === md5(join(ROOT, 'package.json'))
+if (!isInstalledCopy) {
+  ok('跳过整段（当前目录不是装机副本 —— 例如在 git archive 发布面上跑）')
+} else {
+  for (const f of ['lib/index.js', 'orchestrator/core.js', 'orchestrator/host.js', 'index.js', 'package.json']) {
+    const inst = join(INSTALLED, f)
+    if (!existsSync(inst)) { ok(`跳过（装机目录不存在）${f}`); continue }
+    const a = md5(inst), b = md5(join(ROOT, f))
+    check(`md5 一致 ${f}`, a === b, `装机=${a} 源码=${b}`)
+  }
 }
 
 console.log(`\n${fail === 0 ? '✅ 全部通过' : '❌ 有失败'}：${pass} passed, ${fail} failed`)

@@ -56,9 +56,17 @@ if (!existsSync(join(MEM_BASE, 'bin', 'mem.py'))) {
 }
 
 // ---- 先拿到一个真实存在、且有工作区的会话 ----
-const listed = await listContinuitySessions(STATE_BASE, MEM_BASE)
+// ★ 2026-10-22：整套测试并发跑时，mem.py 偶尔会慢（实测曾触发旧版 15s 上限）。
+//   这里失败先重试一次并**打印真实原因** —— 把"偶发慢"与"真坏"分开，
+//   同时不允许静默：两次都失败就把 err 原样报出来，不写成 `err=` 空串。
+let listed = await listContinuitySessions(STATE_BASE, MEM_BASE)
+if (!listed.ok || listed.sessions.length === 0) {
+  console.log(`     （首次取会话失败，1.5s 后重试一次）err=${JSON.stringify(listed.error || '')}`)
+  await new Promise((r) => setTimeout(r, 1500))
+  listed = await listContinuitySessions(STATE_BASE, MEM_BASE)
+}
 check('listContinuitySessions 用 memBase 能读到会话', listed.ok === true && listed.sessions.length > 0,
-  `ok=${listed.ok} n=${listed.sessions.length} err=${listed.error || ''}`)
+  `ok=${listed.ok} n=${listed.sessions.length} err=${JSON.stringify(listed.error || '')}`)
 check('（对照）用错误目录读不到会话 ⇒ 证明 memBase 参数真的生效', (await listContinuitySessions(STATE_BASE)).sessions.length === 0)
 
 const withProject = (listed.sessions || []).filter((s) => s.project)
