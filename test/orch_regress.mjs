@@ -245,15 +245,26 @@ console.log('\n【L 测试不得污染生产台账（第六轮）】')
   const nRows = () => {
     try { return readFileSync(LEDGER, 'utf8').trim().split('\n').filter(Boolean).length } catch { return -1 }
   }
-  const before = nRows()
+  // 只数「测试会话」行。生产台账同时被正在运行的 DSH 真实轮次写入，
+  // 用总行数会误报（2026-10-21 实测 before=2288 after=2289，增长来自真实会话）。
+  const testRows = () => {
+    try {
+      return readFileSync(LEDGER, 'utf8').trim().split('\n').filter(Boolean)
+        .map((l) => { try { return JSON.parse(l) } catch { return null } })
+        .filter((r) => r && /^(selfcheck|session-test)/.test(String(r.session || ''))).length
+    } catch { return -1 }
+  }
+  const before = testRows()
   let err = ''
   try {
+    const isolatedBase = join(tmpdir(), 'orch-selfcheck-base-' + Date.now())
+    mkdirSync(isolatedBase, { recursive: true })
     execFileSync(process.execPath, [join(ROOT, 'test', 'selfcheck.mjs')],
-      { env: { ...process.env, DSH_MEMORY_NO_INGEST: '1' }, stdio: 'pipe' })
+      { env: { ...process.env, DSH_MEMORY_NO_INGEST: '1', DSH_MEMORY_BASE: isolatedBase }, stdio: 'pipe' })
   } catch (e) { err = String(e?.message || e).slice(0, 80) }
-  const after = nRows()
-  check('跑一次 selfcheck ⇒ 生产台账零增长', before >= 0 && after === before,
-    `before=${before} after=${after}${err ? ' childErr=' + err : ''}`)
+  const after = testRows()
+  check('跑一次 selfcheck ⇒ 生产台账无测试会话新增', before >= 0 && after === before,
+    `testRows before=${before} after=${after}${err ? ' childErr=' + err : ''}`)
 }
 
 console.log('\n【M 回声过滤：只按信息增量判，与"是否重复/句子长短"无关（第八轮根治）】')
@@ -312,30 +323,30 @@ console.log('\n【N 项目闸：另一个项目的记录不得冒充本项目的
 //   主模型当场识破（"那是上游委托项目，我不进材料"）—— 但**注入已经发生**；换个没识破的模型就写进材料了。
 {
   const { projectDomains, projectVerdict } = core
-  const OWN = '我们在做 D:\\agent\\示例项目甲_2026-10\\09_项目意义与应用前景_v0.1.md'
+  const OWN = '我们在做 D:\\示例工作区\\示例项目甲_2026-10\\09_项目意义与应用前景_v0.1.md'
   const BANXUE = '《示例报告_20260915》（示例项目乙）：120项功能清单已逐项过账 '
-    + 'D:\\agent\\示例项目乙_2026\\07_测试与性能\\_audit_H_示例.md'
+    + 'D:\\示例工作区\\示例项目乙_2026\\07_测试与性能\\_audit_H_示例.md'
   check('项目闸·指纹抽出"示例项目乙"', projectDomains(BANXUE).some((d) => d.key === '示例项目乙'),
     JSON.stringify(projectDomains(BANXUE)))
   check('项目闸·年份后缀归一（示例项目乙_2026 ⇒ 示例项目乙）',
-    projectDomains('D:\\agent\\示例项目乙_2026\\a')[0].key === '示例项目乙', '')
+    projectDomains('D:\\示例工作区\\示例项目乙_2026\\a')[0].key === '示例项目乙', '')
   // 正斜杠写法也认（两种分隔符都当分隔符）；引号必须留在排除集里
   check('项目闸·正斜杠写法只取一级目录',
-    projectDomains('D:/agent/示例项目乙_2026/_coldstart_data/x.json')[0].raw === '示例项目乙_2026',
-    JSON.stringify(projectDomains('D:/agent/示例项目乙_2026/_coldstart_data/x.json')))
+    projectDomains('D:/示例工作区/示例项目乙_2026/_coldstart_data/x.json')[0].raw === '示例项目乙_2026',
+    JSON.stringify(projectDomains('D:/示例工作区/示例项目乙_2026/_coldstart_data/x.json')))
   check('项目闸·与本会话项目不相交 ⇒ cross', projectVerdict(BANXUE, OWN).cross === true, '')
   check('项目闸·用户自己点名该项目 ⇒ 不算 cross（跨项目取经）',
     projectVerdict(BANXUE, '把示例项目乙的东西学习过来').cross === false, '')
   check('项目闸·本会话无线索 ⇒ 不下判断（不误杀跨会话召回）', projectVerdict(BANXUE, '').cross === false, '')
   check('项目闸·同一项目 ⇒ 不误杀',
-    projectVerdict('D:\\agent\\示例项目甲_2026-10\\x.md', OWN).cross === false, '')
+    projectVerdict('D:\\示例工作区\\示例项目甲_2026-10\\x.md', OWN).cross === false, '')
   check('项目闸·无路径候选 ⇒ 不降级（交给判官按相关性判）',
     projectVerdict('审计H批12项状态：已实现2项（47、53）', OWN).cross === false, '')
 
   const cfgN = { persistMax: 4, quoteMax: 4, forceOnKeywords: ['之前'], projectGate: true }
   const cands = [
     { text: BANXUE, cite: 'dsh:session-examplecite#turn=49', timeStart: Date.now() - 30 * 86400000 },
-    { text: '本项目：09_项目意义与应用前景_v0.1.md 已存在 D:\\agent\\示例项目甲_2026-10\\09_项目意义与应用前景_v0.1.md',
+    { text: '本项目：09_项目意义与应用前景_v0.1.md 已存在 D:\\示例工作区\\示例项目甲_2026-10\\09_项目意义与应用前景_v0.1.md',
       cite: 'dsh:session-examplesess#turn=16', timeStart: Date.now() - 600000 },
   ]
   const pick = (p, q, cfg2 = cfgN, userText = '项目已有技术基础及当前研发进度') => enforceHardRules(

@@ -162,5 +162,33 @@ const same = await hook({ agent: { id: 'session-test' }, turn: 1, signal: undefi
 t('F 样板轮：原样返回 decision（不注入、不 spawn mem.py）', same === decision && spawned === 0, JSON.stringify(same)?.slice(0, 80))
 t('F 版本标识与 package.json 一致', VERSION === pkgVersion, `VERSION=${VERSION} package.json=${pkgVersion}`)
 
+// ------------------------------------------- G 上下文压缩后仍能续接（2026-10-21）
+// 目标：模拟"上下文被压缩"——早前的对话全没了，只剩本轮一条短消息。
+// 判据：状态包里的确认项（目标锁 / 硬约束）必须**照旧注入**，因为它们来自磁盘，不来自消息历史。
+// 这条测的是"续接能力本身"，不是"注入到模型后的最终 messages"（后者外部看不到）。
+{
+  const { saveScope, confirmContinuityItem } = await import(pathToFileURL(join(here, '..', 'continuity.js')).href)
+  // ★ 2026-10-22：范围按对话存 —— 这里给的就是下面 hook 里用的那个会话 id（session-test）。
+  saveScope(process.env.DSH_MEMORY_BASE, 'session-test', { enabled: true, mode: 'all' })
+  confirmContinuityItem(process.env.DSH_MEMORY_BASE, { kind: 'goal', text: '压缩后必须保住的目标', project: 'p' }, { cite: 'dsh:s9#turn=1', project: 'p' })
+  confirmContinuityItem(process.env.DSH_MEMORY_BASE, { kind: 'constraint', text: '压缩后必须保住的硬约束', project: 'p' }, { cite: 'dsh:s9#turn=2', project: 'p' })
+
+  // 压缩后的样子：没有历史、只有一条极短的新消息（且不是插件来源）
+  const compacted = {
+    kind: 'enter',
+    messages: [{ role: 'user', content: [{ type: 'text', text: '继续' }] }],
+  }
+  const out = await hook({ agent: { id: 'session-test' }, turn: 2, signal: undefined }, async () => compacted)
+  const joined = (out?.messages || []).map((m) => (Array.isArray(m.content) ? m.content.map((c) => c?.text || '').join('') : String(m.content || ''))).join('\n')
+  t('G 压缩后：目标锁仍被注入', joined.includes('压缩后必须保住的目标'), joined.slice(0, 160))
+  t('G 压缩后：硬约束仍被注入', joined.includes('压缩后必须保住的硬约束'), joined.slice(0, 160))
+  t('G 压缩后：注入项带出处（可回溯）', joined.includes('dsh:s9#turn=1'), '')
+  // 负例：关掉连续性 ⇒ 同样场景不得注入（证明上面不是"任何文本都会被塞进去"）
+  saveScope(process.env.DSH_MEMORY_BASE, 'session-test', { enabled: false, mode: 'off' })
+  const out2 = await hook({ agent: { id: 'session-test' }, turn: 3, signal: undefined }, async () => ({ kind: 'enter', messages: [{ role: 'user', content: [{ type: 'text', text: '继续' }] }] }))
+  const joined2 = (out2?.messages || []).map((m) => (Array.isArray(m.content) ? m.content.map((c) => c?.text || '').join('') : String(m.content || ''))).join('\n')
+  t('G 负例：关闭后同样场景不再注入', !joined2.includes('压缩后必须保住的目标'), joined2.slice(0, 160))
+}
+
 process.stdout.write(`\nv0.1.5 回归：${checks - failures}/${checks} 通过\n`)
 process.exit(failures === 0 ? 0 : 1)

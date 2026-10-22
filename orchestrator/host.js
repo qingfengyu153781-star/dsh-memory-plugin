@@ -16,6 +16,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { join, dirname, resolve } from 'node:path'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { spawn } from 'node:child_process'
+import { loadContinuity, saveContinuity, updateContinuityPacket, confirmContinuityItem, continuityPath, MODES, resetContinuity, rejectContinuityCandidate, rejectContinuityItem, captureContinuityCandidate, classifyContinuityStatement, classifyImportedStatement, scopeFor, saveScope, normSessionId, packetItemCount, toBool } from '../continuity.js'
 import {
   loadConfig, saveConfig, stats, recentDecisions,
   shouldOrchestrate, orchestrate, hasForceSignal, isOwnInjectionText, INJECT_TAGS, logDecision,
@@ -386,10 +388,168 @@ function extractText(m) {
  * 且需要 `kind: 'exact'`。这里统一按该约定书写，并把业务逻辑与收发分离，
  * 便于单测（单测里直接调 handler 会因为没有真 res 而走 _json 分支）。
  */
+/**
+ * 从指定对话里**提取**目标/约束/决定，存成待确认候选。
+ *
+ * ★ 2026-10-22 实测缺口：用户开了连续性、选了工作区与对话，但状态包一直是空的
+ *   （0 确认项、0 候选）⇒ 注入为空 ⇒ 用户看到的就是"功能依旧没有"。
+ *   原因：捕获只发生在**当前会话的每一轮**，历史对话里的目标/约束从来没被收进来。
+ *   而"跨对话无缝衔接"的本质就是：**新对话要能拿到旧对话的工作状态**。
+ *
+ * 做法：用 mem.py show 读所选会话的用户原话，过 classifyImportedStatement
+ *   （与写侧同一份判定），带真实出处存成候选。候选仍不是事实，需用户确认。
+ */
+export async function importContinuityFromSessions(baseDir, sessionIds = [], { perSession = 60, maxSessions = 5, autoConfirm = false, memBase = baseDir } = {}) {
+  // ★ 2026-10-22：脚本从 memBase 取（记忆库），状态写进 baseDir（状态目录）。
+  //   两者在沙箱测试里是分开的；混用会让导入链路静默不执行。
+  const script = join(memBase, 'bin', 'mem.py')
+  const ids = (Array.isArray(sessionIds) ? sessionIds : []).filter(Boolean).slice(0, maxSessions)
+  const runShow = (sid) => new Promise((resolve) => {
+    const child = spawn(process.env.DSH_MEMORY_PYTHON || 'python',
+      [script, 'show', sid, '--kind', 'user_text', '--limit', String(perSession), '--width', '400', '--full'],
+      { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' } })
+    let out = ''
+    child.stdout.on('data', (x) => { out += x })
+    const timer = setTimeout(() => { try { child.kill() } catch { /* noop */ } }, 20000)
+    child.on('close', () => { clearTimeout(timer); resolve(out) })
+    child.on('error', () => { clearTimeout(timer); resolve('') })
+  })
+
+  // ★ 项目标签必须取来源会话的真实项目。传空串的后果（实测语义）：
+  //   project 模式的 inScope 要求 item.project === state.project ⇒ 空标签会被全部过滤，
+  //   导入"成功"但状态包里一条都看不见 —— 等于白做，而且看不出原因。
+  // ★ 必须把 memBase 传下去：否则列表来自错误的目录 ⇒ byNorm 为空 ⇒
+  //   每个 id 都落进 skippedNoProject ⇒ imported 恒为 0（假绿）。
+  const listed = await listContinuitySessions(baseDir, memBase)
+  // ★ 2026-10-22：按**归一键**建表（`session-<uuid>` 与裸 `<uuid>` 视为同一对话），
+  //   并把请求里的 id 换成列表里的**规范写法** —— 这样出处（cite）与库内 session_id 一致，
+  //   不会出现"导入了但按 id 查不到"。
+  const byNorm = new Map()
+  for (const s of listed?.sessions || []) byNorm.set(normSessionId(s.sessionId), { id: s.sessionId, project: s.project || '' })
+
+  // ★ 2026-10-22：计数必须覆盖**所有承载位置**（目标锁/约束/决定/候选…）。
+  //   旧实现只数 candidates；一旦开启自动确认，条目直接进 goalLock/decisions，
+  //   候选数不增加 ⇒ 明明导入成功却返回 imported:0 ⇒ 界面显示"没有发现明确的目标/约束/决定"。
+  const countItems = () => packetItemCount(loadContinuity(baseDir))
+  let added = 0
+  let autoConfirmed = 0
+  let scanned = 0
+  let skippedNoProject = 0
+  const seen = new Set()
+  for (const raw of ids) {
+    const hit = byNorm.get(normSessionId(raw))
+    const sid = hit?.id || raw
+    const sourceProject = hit?.project || ''
+    if (!sourceProject) { skippedNoProject += 1; continue }
+    const text = await runShow(sid)
+    // 解析 mem.py show 的纯文本输出：`--- atom#ID [user_text] 时间 turn=N ...` 之后是正文行
+    const blocks = text.split(/^--- atom#/m).slice(1)
+    for (const b of blocks) {
+      const head = b.split('\n')[0] || ''
+      const m = head.match(/turn=(\d+)/)
+      if (!m) continue
+      const body = b.split('\n').slice(1).join('\n').trim()
+      if (!body) continue
+      scanned += 1
+      const stmt = classifyImportedStatement(body)
+      if (!stmt) continue
+      const cite = `dsh:${sid}#turn=${m[1]}`
+      if (seen.has(cite + stmt.kind)) continue
+      seen.add(cite + stmt.kind)
+      const before = countItems()
+      const r = captureContinuityCandidate(baseDir, { kind: stmt.kind, text: stmt.text, cite, sourceSession: sid, project: sourceProject }, { autoConfirm })
+      // ★ captureContinuityCandidate 恒返回状态对象（不是布尔），所以只能比前后条数。
+      //   用返回值判"是否真的收下"会把每次都算成功 —— 假绿。
+      if (countItems() > before) added += 1
+      // 自动确认的条数单独报出来：用户要知道"哪些是机器直接生效的"。
+      if (r && r.autoConfirmed) autoConfirmed += 1
+    }
+  }
+  const after = loadContinuity(baseDir)
+  return {
+    ok: true,
+    imported: added,
+    autoConfirmed,
+    scanned,
+    skippedNoProject,
+    candidates: (after.packet.candidates || []).length,
+    goalLocked: Boolean(after.packet?.goalLock?.text),
+    sessions: ids.length,
+    note: skippedNoProject ? `${skippedNoProject} 个对话查不到工作区，已跳过（项目模式下空标签会被过滤）` : '',
+  }
+}
+
+/**
+ * 列出可衔接的会话。
+ *
+ * @param {string} baseDir 状态目录（continuity/state.json 所在）
+ * @param {string} [memBase] 记忆库目录（bin/mem.py 所在）。省略 = 与 baseDir 相同。
+ *
+ * ★ 为什么要分开（2026-10-22）：状态目录和记忆库目录**不一定相同**。
+ *   沙箱测试里状态写到临时目录，但 mem.py 仍在正式记忆库；
+ *   若强行合并，测试要么污染正式状态，要么导入链路根本不跑（假绿）。
+ */
+export function listContinuitySessions(baseDir, memBase = baseDir) {
+  const script = join(memBase, 'bin', 'mem.py')
+  return new Promise((resolve) => {
+    const child = spawn(process.env.DSH_MEMORY_PYTHON || 'python', [script, 'sessions', '--json', '--limit', '200'], {
+      windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PYTHONIOENCODING: 'utf-8', PYTHONUTF8: '1' },
+    })
+    let out = ''; let err = ''
+    child.stdout.on('data', (x) => { out += x })
+    child.stderr.on('data', (x) => { err += x })
+    const timer = setTimeout(() => { try { child.kill() } catch {} }, 15000)
+    child.on('close', (code) => {
+      clearTimeout(timer)
+      if (code !== 0) return resolve({ ok: false, error: err.slice(0, 500), sessions: [] })
+      try {
+        const parsed = JSON.parse(out)
+        const sessions = (Array.isArray(parsed) ? parsed : parsed.sessions || parsed.rows || [])
+          .map((s) => ({ sessionId: s.session_id || s.id || '', title: s.title || s.label || '', project: s.cwd || s.dir || '', source: s.source || '', origin: s.origin || '' }))
+          .filter((s) => s.sessionId)
+        resolve({ ok: true, sessions })
+      } catch (e) { resolve({ ok: false, error: String(e?.message ?? e), sessions: [] }) }
+    })
+    child.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, error: String(e?.message ?? e), sessions: [] }) })
+  })
+}
+
 export function registerRoutes(webCtx, baseDir = BASE) {
-  const send = (res, obj, status = 200) => {
+  // ★ 2026-10-21（桌面版实测）：渲染进程 origin 是 `dsh-app://app`（桌面日志成排出现
+  //   `dsh-app://app/assets/…`），而本插件路由挂在 `http://127.0.0.1:<port>` 上。
+  //   实测响应里**没有任何 Access-Control-Allow-Origin** ⇒ 浏览器拦掉跨源 fetch
+  //   ⇒ 面板"开启项目连续性"点了没反应（reports/cors_check.txt 为证）。
+  //   修法：只对"桌面页面 origin"与"本机回环 origin"放行，并应答预检 OPTIONS。
+  //   注：不列 file:// —— Chromium 对 file 页面发 `Origin: null`，列了也是死条目。
+  const isLoopbackOrigin = (o) => {
+    try {
+      const u = new URL(o)
+      if (!/^https?:$/i.test(u.protocol)) return false
+      return ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(u.hostname)
+    } catch { return false }
+  }
+  const corsHeaders = (req) => {
+    let origin = ''
+    try { origin = String((req && req.headers && req.headers.origin) || '') } catch { /* noop */ }
+    if (!origin) return {}
+    if (origin !== 'dsh-app://app' && !isLoopbackOrigin(origin)) return {}
+    return {
+      'access-control-allow-origin': origin,
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
+      'access-control-allow-headers': 'content-type',
+      'access-control-max-age': '600',
+      vary: 'Origin',
+    }
+  }
+
+  const send = (res, obj, status = 200, req = null) => {
     if (res && typeof res.writeHead === 'function') {
-      res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+      res.writeHead(status, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+        ...corsHeaders(req),
+      })
       res.end(JSON.stringify(obj))
     }
     return { status, body: JSON.stringify(obj) }
@@ -436,6 +596,139 @@ export function registerRoutes(webCtx, baseDir = BASE) {
       },
     },
     { path: '/dsh-memory/orch/models', method: 'GET', fn: () => json({ models: listModels() }) },
+    { path: '/dsh-memory/orch/continuity/sessions', method: 'GET', fn: () => listContinuitySessions(baseDir) },
+    {
+      // 从所选对话导入候选（GET + query，与其它写路由同口径：DSH exact 路由读不到 POST body）。
+      // 例：/dsh-memory/orch/continuity/import?sessionIds=["session-abc"]
+      path: '/dsh-memory/orch/continuity/import', method: 'GET',
+      fn: async (req) => {
+        let ids = []
+        let perSession = 60
+        let sid = ''
+        try {
+          const u = new URL(req?.url || '/', 'http://x')
+          // ★ 2026-10-22：导入范围取**本对话自己的**衔接列表，不再取全局 selectedSessions。
+          sid = String(u.searchParams.get('sessionId') || '')
+          const raw = u.searchParams.get('sessionIds') || '[]'
+          try { ids = JSON.parse(raw) } catch { ids = raw.split(',').map((x) => x.trim()).filter(Boolean) }
+          // ★ 本对话自己不在"要导入"的列表里（导入是为了拿**别人**的内容；
+          //   把自己也扫一遍只会把当前这轮的话重复收成候选）。
+          //   身份比较过 normSessionId：两种前缀（session-<uuid> / 裸 uuid）都算同一个对话。
+          const selfNorm = normSessionId(sid)
+          ids = ids.filter((x) => normSessionId(x) !== selfNorm)
+          if (!ids.length && sid) {
+            // 未显式给 ⇒ 用本对话已接上的对话
+            const sc = scopeFor(loadContinuity(baseDir), sid)
+            ids = (Array.isArray(sc.selectedSessions) ? sc.selectedSessions : []).filter((x) => normSessionId(x) !== selfNorm)
+          }
+          if (u.searchParams.has('perSession')) perSession = Math.max(5, Math.min(200, Number(u.searchParams.get('perSession')) || 60))
+        } catch { /* 用空表 */ }
+        if (!ids.length) return json({ ok: false, error: '没有可导入的对话：请先在本对话的面板里勾选要接上的对话' })
+        // ★ 2026-10-22：自动确认按**本对话的设置**决定（默认开）。
+        //   用户原话：「<用户原话已隐去：自动确认不该靠人点>」
+        const autoConfirm = sid ? scopeFor(loadContinuity(baseDir), sid).autoConfirm !== false : false
+        return json(await importContinuityFromSessions(baseDir, ids, { perSession, autoConfirm }))
+      },
+    },
+    {
+      path: '/dsh-memory/orch/continuity', method: 'GET',
+      fn: (req) => {
+        // DSH exact routes may not preserve HTTP verbs; support query writes here too.
+        const patch = {}
+        let reset = false
+        let keepScope = true
+        let rejectId = ''
+        let rejectItemId = ''
+        let sid = ''
+        try {
+          const u = new URL(req?.url || '/', 'http://x')
+          // ★ 2026-10-22：sessionId 是**必需**的 —— 范围按对话存，没有它就只能读不能写。
+          sid = String(u.searchParams.get('sessionId') || '')
+          for (const k of ['enabled', 'mode', 'project', 'autoConfirm']) {
+            if (!u.searchParams.has(k)) continue
+            const v = u.searchParams.get(k)
+            // 布尔一律走 toBool：query 来的是字符串（'false'/'0'）。
+            // 写成 `v === 'true' || v === '1'` 会让 '0' 判错；写成 `!== false` 则永远关不掉。
+            // autoConfirm 缺省为 true（默认自动确认），enabled 缺省为 false。
+            patch[k] = (k === 'enabled' || k === 'autoConfirm') ? toBool(v, k === 'autoConfirm') : v
+          }
+          if (u.searchParams.has('selectedSessions')) {
+            const raw = u.searchParams.get('selectedSessions') || '[]'
+            try { patch.selectedSessions = JSON.parse(raw) } catch { patch.selectedSessions = raw.split(',').map((x) => x.trim()).filter(Boolean) }
+          }
+          // reset / reject 也走 query：UI 与脚本都能用，且不依赖 POST body（DSH exact 路由读不到 body）。
+          reset = ['true', '1'].includes(String(u.searchParams.get('reset') || ''))
+          keepScope = !['false', '0'].includes(String(u.searchParams.get('keepScope') || ''))
+          rejectId = String(u.searchParams.get('reject') || '')
+          // ★ 撤销**已确认**条目（自动确认必须能撤销，否则等于把机器判断固化）。
+          rejectItemId = String(u.searchParams.get('rejectItem') || '')
+        } catch { /* read-only fallback */ }
+        const reply = (state, extra = {}) => json({
+          ok: true, ...state, ...extra,
+          sessionId: sid, scope: scopeFor(state, sid), path: continuityPath(baseDir),
+        })
+        if (rejectItemId) {
+          const r = rejectContinuityItem(baseDir, rejectItemId)
+          return reply(loadContinuity(baseDir), { ok: r.ok, error: r.error, removed: r.removed })
+        }
+        if (rejectId) {
+          const r = rejectContinuityCandidate(baseDir, rejectId)
+          return reply(loadContinuity(baseDir), { ok: r.ok, error: r.error, removed: r.removed })
+        }
+        if (reset) {
+          return reply(resetContinuity(baseDir, { keepScope }), { reset: true, keepScope })
+        }
+        if (Object.keys(patch).length) {
+          // 写授权范围**必须**带 sessionId：缺了就拒绝，绝不落成全局设置。
+          if (!sid) return json({ ok: false, error: 'sessionId is required: continuity scope is per-conversation' })
+          if (patch.mode && !MODES.has(String(patch.mode))) return json({ ok: false, error: 'invalid continuity mode' })
+          return reply(saveScope(baseDir, sid, patch))
+        }
+        return reply(loadContinuity(baseDir))
+      },
+    },
+    {
+      path: '/dsh-memory/orch/continuity/item', method: 'POST',
+      fn: async (req) => {
+        let body = await readBody(req)
+        if (!body || Object.keys(body).length === 0) {
+          try { body = Object.fromEntries(new URL(req?.url || '/', 'http://x').searchParams.entries()) } catch { body = {} }
+        }
+        if (typeof body.item === 'string') {
+          try { body.item = JSON.parse(body.item) } catch { /* 下面返回 item required */ }
+        }
+        if (!body.item || typeof body.item !== 'object') return json({ ok: false, error: 'item required' })
+        try {
+          return json({ ok: true, ...confirmContinuityItem(baseDir, body.item, {
+            cite: body.cite || body.item.cite || '', project: body.project || '', supersedes: body.supersedes || '',
+          }) })
+        } catch (e) { return json({ ok: false, error: String(e?.message ?? e) }) }
+      },
+    },
+    {
+      path: '/dsh-memory/orch/continuity', method: 'POST',
+      fn: async (req) => {
+        let body = await readBody(req)
+        if (!body || Object.keys(body).length === 0) {
+          try { body = Object.fromEntries(new URL(req?.url || '/', 'http://x').searchParams.entries()) } catch { body = {} }
+        }
+        const allowed = ['enabled', 'mode', 'project', 'selectedSessions', 'autoConfirm']
+        const patch = {}
+        for (const k of allowed) if (k in body) {
+          // ★ 布尔一律走 toBool：body 可能来自 JSON（真布尔）也可能来自 query（字符串 'false'/'0'）。
+          if (k === 'enabled' || k === 'autoConfirm') patch[k] = toBool(body[k], k === 'autoConfirm')
+          else if (k === 'selectedSessions') {
+            try { patch[k] = Array.isArray(body[k]) ? body[k] : JSON.parse(String(body[k])) } catch { patch[k] = String(body[k]).split(',').map((x) => x.trim()).filter(Boolean) }
+          } else patch[k] = body[k]
+        }
+        if (patch.mode && !MODES.has(String(patch.mode))) return json({ ok: false, error: 'invalid continuity mode' })
+        // ★ 2026-10-22：POST 通道同样必须带 sessionId，写的是**该对话自己的**范围。
+        const sid = String(body.sessionId || '')
+        if (!sid) return json({ ok: false, error: 'sessionId is required: continuity scope is per-conversation' })
+        const saved = saveScope(baseDir, sid, patch)
+        return json({ ok: true, ...saved, sessionId: sid, scope: saved.scope, path: continuityPath(baseDir) })
+      },
+    },
     {
       path: '/dsh-memory/orch/decisions', method: 'GET',
       fn: (req) => {
@@ -515,10 +808,16 @@ export function registerRoutes(webCtx, baseDir = BASE) {
         path: r.path,
         handler: async (req, res) => {
           try {
+            // 预检必须先应答、且不执行业务（否则 OPTIONS 会真的读一次状态）。
+            if (req && String(req.method || '').toUpperCase() === 'OPTIONS') {
+              return send(res, { ok: true, preflight: true }, 204, req)
+            }
             const out = await r.fn(req)
-            return send(res, out)
+            // ★ 必须把 req 传进 send：CORS 头要靠它读 Origin。
+            //   漏传 ⇒ corsHeaders(null) 恒返回 {} ⇒ 跨源仍被拦（改了半天等于没改）。
+            return send(res, out, 200, req)
           } catch (e) {
-            return send(res, { ok: false, error: String(e?.message ?? e) }, 500)
+            return send(res, { ok: false, error: String(e?.message ?? e) }, 500, req)
           }
         },
       })

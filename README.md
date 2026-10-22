@@ -181,6 +181,23 @@ dsh-memory-plugin/
 
 **修复账（含改前/改后 md5）**：`<WORKSPACE>\dsh-rag-memory\reports\FIX_LEDGER_memory_plugin_20261002.md`
 
+### v0.4.0（2026-10-21）— 端口跟随（DSH 每次重启端口都会变）
+
+**问题**：客户端把 `19387/19388/19389` 写死成候选端口；验收脚本靠人抄端口 ⇒ 重启后请求打到旧端口或直接失效。
+
+**改法（三层，缺一不可）**：
+1. **客户端只走当前页面同源**：删除全部硬编码端口；请求基址 = `location.origin`，非 HTTP 页面（如 `dsh-app://app`）明确报"宿主未就绪"，不再猜端口。缓存按 origin 记忆，origin 一变立即丢弃。
+2. **新增轻量实例探针** `GET /dsh-memory/instance`：返回 `{plugin, version, pid, startedAt, memoryBase}`，**不 spawn mem.py**（毫秒级）。`/dsh-memory/health` 会跑一次 `mem.py recall`，实测 **8.2 s**，不适合做端点发现。
+3. **验收工具** `dsh-rag-memory/tools/dsh_endpoint.mjs`：解析顺序 = 本轮 runtime URL → 该 PID 的监听端口；每个候选必须同时通过 `/dsh-memory/instance`（校验插件名与 pid/startedAt）与 `/continuity/sessions`（校验响应结构）才算可用。旧快照里的端口只用于错误诊断，**永不作为候选**。
+
+**请求纪律**：失败即清空缓存，**不自动重放**业务请求（GET 也可能有写副作用，例如 continuity 的 query 写状态）；同一端口换进程时 `pid/startedAt` 变化 ⇒ 识别为新实例并触发 `onInstanceChanged`。
+
+**自检**：
+```bash
+node <WORKSPACE>\dsh-rag-memory\tools\check_dsh_endpoint.mjs --url http://127.0.0.1:<当前端口>
+node <WORKSPACE>\dsh-rag-memory\tools\test_dsh_endpoint.mjs      # 16 条：A/B 换端口、同端口换进程、非 DSH 端口、慢 health、旧响应丢弃、浏览器同源
+```
+
 ### v0.1.4（2026-10-01）— query 清洗 + 回声过滤 + 6000 字上限
 
 - `cleanQuery()` 加样板名单（运行环境措辞、插件辅助上下文、子代理通知…）；

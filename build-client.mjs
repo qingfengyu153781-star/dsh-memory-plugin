@@ -16,10 +16,25 @@
  * 其余原样保留（我们只用 react 一个外部依赖，转换可控且可验证）。
  */
 import { readFileSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
 
 const SRC = new URL('./client.js', import.meta.url)
 const OUT = new URL('./lib/client.js', import.meta.url)
 const PKG = 'dsh-memory-plugin'
+
+// ★ 2026-10-22：先做语法检查再构建。
+//   实测踩到：client.js 多了一个 `)`，本脚本只做文本替换、**不解析 JS**，
+//   于是照样产出 bundle 并打印"已构建"—— 语法坏掉的产物被当成成功交付，
+//   只有真在浏览器里跑才会白屏，而白屏很难归因到这里。
+//   现在源码语法不过就直接失败（非零退出），不给假成功。
+try {
+  execFileSync(process.execPath, ['--check', SRC.pathname.replace(/^\/([A-Za-z]:)/, '$1')], { stdio: 'pipe' })
+} catch (e) {
+  const msg = String(e?.stderr || e?.message || e)
+  console.error('✗ client.js 语法检查失败，已中止构建（不产出坏 bundle）：')
+  console.error(msg.trim())
+  process.exit(1)
+}
 
 let src = readFileSync(SRC, 'utf8')
 
