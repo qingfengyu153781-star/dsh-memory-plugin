@@ -160,6 +160,7 @@ def cmd_status(a) -> int:
 def cmd_selftest(a) -> int:
     """跑全部闸门的负例自检：把'以前会犯的错'喂进去，看闸门当场红。"""
     rc_total = 0
+    rc_unverified = 0
     ran = 0
     unverified: list = []
     for name in ("spec", "obj", "probe", "done", "lang", "cap", "root", "intent", "path", "struct", "xcheck", "vision", "decision", "doc", "behavior", "mem", "brief", "ask", "silent", "public", "purity", "vault", "batch", "constraints", "criteria", "del", "loop", "mount", "mem_hygiene", "adv", "prov", "selfwrite", "syntax", "integ", "directional", "polarity", "witness", "clean"):
@@ -174,24 +175,35 @@ def cmd_selftest(a) -> int:
         r = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace")
         out = r.stdout or r.stderr
         print(out)
-        rc_total |= r.returncode
         ran += 1
-        # ★ 三态口径（2026-10-16）：本机集成闸在**环境未接**时输出「未验」。
-        #   **未验 ≠ 通过** ⇒ 必须在汇总里单独计数、不许并进"全过"。
+        # ★ 三态口径（2026-10-16 / 2026-10-26 修）：本机集成闸在**环境未接**时输出「未验」。
+        #   **未验 ≠ 通过**（所以退出码仍非 0，不许被当成绿灯），
+        #   但**未验 ≠ 失败**（所以不许并进"有失败项"）。
+        #   旧写法直接 `rc_total |= r.returncode` ⇒ 一个全新安装里
+        #   xcheck/constraints/mem_hygiene 三道因"本机没台账"记未验，
+        #   汇总就报"有失败项"，让人以为闸门坏了。
         if "自检结果：未验" in out:
             reason = next((ln.strip() for ln in out.splitlines() if "自检结果：未验" in ln), "")
             unverified.append("%s：%s" % (name, reason))
+            rc_unverified |= r.returncode
+        else:
+            rc_total |= r.returncode
     print("\n" + "=" * 74)
     if rc_total != 0:
         print("闸门自检汇总：有失败项（见上）")
+        if unverified:
+            print("  另有 %d 道未验（环境未接，非通过）：" % len(unverified))
+            for u in unverified:
+                print("    %s" % u)
     elif unverified:
-        print("闸门自检汇总：全绿（%d 道全过 ｜ %d 道未验 ｜ 0 红）"
+        print("闸门自检汇总：无红（%d 道全过 ｜ %d 道未验 ｜ 0 红）"
               % (ran - len(unverified), len(unverified)))
         for u in unverified:
             print("  未验（环境未接，非通过）：%s" % u)
+        print("  ⚠ 未验不算通过：退出码保持非 0，免得被当绿灯。")
     else:
         print("闸门自检汇总：全部通过")
-    return rc_total
+    return rc_total or rc_unverified
 
 
 def cmd_vault(a, extra: list[str]) -> int:

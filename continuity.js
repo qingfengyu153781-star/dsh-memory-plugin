@@ -123,7 +123,8 @@ export function scopeFor(state, sessionId = '') {
  * 候选卫生：判断一段文本是否"不该进状态包"。
  *
  * ★ 2026-10-21 用户当场指认的铁证：状态包里出现了
- *   `Current working directory: "D:\agent". Current DeepSeek Harness implementation checkout: …`
+ *   运行时环境摘要（`Current working directory: …` + `Current DeepSeek Harness
+ *   implementation checkout: …` 这一整段）
  *   以及一整段别的会话的群聊记录。
  *
  * 病根不是"名单少一条"，而是**判据的形态错了**：

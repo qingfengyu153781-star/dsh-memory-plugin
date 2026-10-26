@@ -1,6 +1,6 @@
 {
   "name": "dsh-memory-plugin",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
   "description": "DSH 记忆库插件：暴露 memory_recall 工具（走 bin/mem.py）+ 每轮自动召回注入 + 后台增量入库。v0.2.0 新增【注意力编排】：默认关的右栏开关，开启后每轮另调一次模型替当前会话挑选该注入什么（调完即弃，编排调用上下文始终干净），每轮决策留痕可审计。v0.5.0 新增【按对话独立的连续性记忆】：目标锁/硬约束/已确认决定/未完成事项按 sessionId 分开存，没有该对话的 scope 就不注入也不捕获，绝不回落到全局；带出处的条目可自动确认（三道闸防漂移），上下文压缩后仍可续接。",
   "type": "module",
@@ -17,19 +17,42 @@
     "index.js",
     "client.js",
     "build-client.mjs",
-    "lib",
-    "orchestrator",
+    "lib/*.js",
+    "orchestrator/*.js",
     "continuity.js",
     "cordis.patch.yml",
-    "local.config.json",
+    "backend/bin/*.py",
+    "backend/src/memlib/*.py",
+    "guard/*.py",
+    "guard/*.md",
+    "guard/*.yaml",
+    "guard/gates/*.py",
+    "guard/gates/*.json",
+    "guard/tools/*.py",
+    "guard/tools/*.json",
+    "guard/tools/*.txt",
+    "guard/tools/adversarial/*",
+    "guard/projects/*.yaml",
+    "local.config.example.json",
     "README.md",
-    "test"
+    "test/*.mjs",
+    "!**/*._bak_*",
+    "!**/*.bak_*",
+    "!**/*.bak-*",
+    "!**/__pycache__",
+    "!**/*.pyc",
+    "!guard/ledger",
+    "!guard/_guard_ledger",
+    "!**/*.local.json",
+    "!guard/tools/hygiene_forbidden.json",
+    "!guard/tools/purity_deny.local.txt",
+    "!local.config.json"
   ],
   "scripts": {
     "selfcheck": "node test/selfcheck.mjs",
     "regress": "node test/orch_regress.mjs",
     "build:client": "node build-client.mjs",
-    "test": "node test/selfcheck.mjs && node test/inject.mjs && node test/brain_fusion.mjs && node test/orch_regress.mjs && node test/continuity_isolation.mjs && node test/continuity_autoconfirm.mjs && node test/continuity_per_session.mjs && node test/continuity_routes_per_session.mjs && node test/continuity_http_sandbox.mjs && node test/continuity_import_real.mjs && node test/client_confirm_path.mjs && node test/cors_routes.mjs && node test/project_options.mjs && node test/workspace_picker.mjs",
+    "test": "node test/selfcheck.mjs && node test/inject.mjs && node test/brain_fusion.mjs && node test/orch_regress.mjs && node test/continuity_isolation.mjs && node test/continuity_autoconfirm.mjs && node test/continuity_per_session.mjs && node test/continuity_routes_per_session.mjs && node test/continuity_http_sandbox.mjs && node test/continuity_import_real.mjs && node test/client_confirm_path.mjs && node test/cors_routes.mjs && node test/project_options.mjs && node test/workspace_picker.mjs && node test/backend_sync.mjs && node test/npm_pack_hygiene.mjs",
     "regress:brain": "node test/brain_fusion.mjs"
   },
   "dsh": {
@@ -38,6 +61,14 @@
     },
     "client": {
       "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "react": "*"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
     }
   },
   "license": "MIT"

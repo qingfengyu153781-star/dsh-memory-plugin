@@ -1,0 +1,14 @@
+{
+  "_comment": "本机配置模板。复制成 local.config.json 后改成你自己的路径。local.config.json 已被 .gitignore 忽略，不会发布出去。",
+  "_why": "插件需要知道两件事：记忆库目录（bin/mem.py 所在）与当前工作区。这两件事每台机器都不同，所以不能写进代码，也不能随仓库发布。",
+  "_how": [
+    "方式一（推荐，零文件）：设环境变量 DSH_MEMORY_BASE=<记忆库目录>",
+    "方式二：把本文件复制为 local.config.json，改下面的值",
+    "方式三：什么都不做 —— 插件会从自己的位置向上找含 index/ 或 raw/ 的目录；找不到就用 ~/.dsh/memory-library",
+    "自证当前解析结果：python <记忆库>/bin/mem.py paths"
+  ],
+  "memoryBase": "<记忆库目录，例如 D:/work/dsh-rag-memory>",
+  "workspace": "<你的工作区目录，例如 D:/work>",
+  "memoryScript": "<记忆库>/bin/mem.py",
+  "hippoScript": "<可选：hippomem 的 hippo.py，没有就删掉这一行>"
+}

@@ -1,16 +1,49 @@
 # dsh-memory-plugin
 
-一个**可安装的最小 DSH 插件骨架**：把 `<WORKSPACE>\dsh-rag-memory\bin\mem.py` 的跨会话记忆检索
-暴露成模型可调用的 `memory_recall` 工具，并在每轮对话的第一个 step 自动把命中的历史片段注入上下文。
+一个**自带后端**的 DSH 记忆插件：把跨会话记忆检索暴露成模型可调用的 `memory_recall` 工具，
+并在每轮对话的第一个 step 自动把命中的历史片段注入上下文。
+
+**这个包自带记忆后端**（`backend/` 内含 `mem.py` + `memlib`，纯标准库，只需 `zstandard`
+一个可选依赖）。装上就能建库、入库、召回，不依赖作者本机的任何目录。
 
 - 版本基线：**DSH 运行时 0.2.1-rc.2**（本机 `<DSH-CHECKOUT>`，见 `../research/PLUGIN_API.md`）
 - **0.5.0 新增「按对话独立的连续性记忆」**：目标锁 / 硬约束 / 已确认决定 / 未完成事项
   按 `sessionId` 分开存，**没有该对话的 scope 就不注入也不捕获**（绝不回落到全局）；
   带出处的条目可自动确认（问句不提升、人锁目标不被替换、自动锁目标需 ≥1.3 倍才替换），
   上下文压缩后仍可续接。详见下方 v0.5.0 章节。
-- 0.3.9 适配 DSH 0.2.1：`memory_hippo_status` 的 `render` 移入 `output`（新版 `ToolOutputDefinition` 契约；旧写法会被宿主整条拒收）；Python 子进程统一 UTF-8（修台账中文乱码）；`local.config.json` 纳入 `files` 白名单（安装副本不再丢本机路径）
 - 零运行时依赖：`index.js` 只 import `node:child_process` / `node:crypto`，**不 import 任何 `@deepseek-ai/*`**
 - 失败开放：mem.py 出错 / 超时 / 不存在 → 不注入，绝不让这一轮对话失败
+  **★ 但失败可见**：后端找不到时加载期打告警、连续 3 轮召回失败在对话里提示、
+  `GET /dsh-memory/instance` 回传 `scriptExists` / `baseSource` / `degraded`。
+
+## 装之前先看：数据放哪
+
+代码与数据**是分开的**，装包只带来代码：
+
+| | 默认位置 | 怎么改 |
+|---|---|---|
+| 代码 | 插件安装目录（含 `backend/`） | 不用改 |
+| 数据（`index/ raw/ reports/`） | `~/.dsh/memory-library` | 环境变量 `DSH_MEMORY_DATA` |
+
+解析顺序：`DSH_MEMORY_DATA` → 从代码根上溯找含 `index/` 或 `raw/` 的目录 → `~/.dsh/memory-library`。
+**上溯不越过 `node_modules`**（包内安装时不会去认领别人的数据）。
+
+自证当前解析结果：
+
+```bash
+python <插件目录>/backend/bin/mem.py paths
+```
+
+## 前置条件
+
+| 需要 | 说明 | 没有会怎样 |
+|---|---|---|
+| Python 3.9+ | 后端是 Python 脚本 | 召回为空，加载期有告警 |
+| `zstandard`（可选） | 只有读 DSH 会话日志（ingest / sessions）才需要 | 召回照常；ingest 报错并给出安装命令 |
+
+```bash
+python -m pip install zstandard    # 想入库 DSH 会话日志才需要
+```
 
 ## 它注册了什么
 
@@ -150,13 +183,32 @@ dsh plugin --profile desktop remove dsh-memory-plugin
 
 ```
 dsh-memory-plugin/
-├── package.json         # 声明 dsh.bundle.patch —— 这是"能被 profile 启用"的唯一开关
-├── cordis.patch.yml     # bundle 的配置层：insert 一行 name: 'dsh-memory-plugin'
-├── index.js             # 插件入口：export name / inject / apply
-├── test/selfcheck.mjs   # 离线自检（不需要装、不需要起服务）
-├── test/inject.mjs      # v0.1.5 行为回归（40 条，正例+负例）
+├── package.json              # 声明 dsh.bundle.patch —— 这是"能被 profile 启用"的唯一开关
+├── cordis.patch.yml          # bundle 的配置层：insert 一行 name: 'dsh-memory-plugin'
+├── index.js                  # 插件入口：export name / inject / apply
+├── backend/
+│   ├── bin/mem.py            # 记忆后端 CLI（随包发布，装完即可用）
+│   └── src/memlib/           # 后端实现：pipeline / store / dsh / brain / paths …
+├── guard/                    # 39 道护栏闸（随包发布，可自跑 selftest）
+├── local.config.example.json # 本机配置模板（真配置 local.config.json 不进仓、不进包）
+├── test/                     # 回归测试（含 backend_sync / npm_pack_hygiene）
 └── README.md
 ```
+
+**关于 `guard/`**：仓库里有 103 个 tracked 文件、39 道闸，**安装副本里也带**（1.7 MB）。
+装完可以直接跑：
+
+```bash
+python <插件目录>/guard/guard_cli.py selftest
+```
+
+口径：`无红（N 道全过 ｜ M 道未验 ｜ 0 红）`。**未验 ≠ 通过** —— 全新机器上
+`xcheck` / `constraints` / `mem_hygiene` 会因为"本机还没有台账/记忆库样本"记未验，
+退出码保持非 0，免得被当成绿灯。
+
+**关于 `local.config.json`**：它是**本机私有**的（含你自己的绝对路径），
+已在 `.gitignore` 里，**不随仓库、不随安装包发布**。
+需要时把 `local.config.example.json` 复制成它再改值。
 
 ---
 

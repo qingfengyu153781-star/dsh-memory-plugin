@@ -248,6 +248,11 @@ def demo(cfg: ProjectConfig) -> int:
     g = DoneGate(cfg)
     fails = 0
     good_table = Path(__file__).resolve().parent.parent / "ledger" / "_demo_table.png"
+    # ★ 2026-10-26：演示件必须自己建目录。
+    #   旧写法直接 write_bytes ⇒ 全新安装里 `guard/ledger/` 还不存在（台账是被用出来的，
+    #   不随包发布）⇒ 首次跑自检 FileNotFoundError，第二次才过 —— 不幂等，
+    #   而且表现为"闸门自检有失败项"，看起来像闸坏了。
+    good_table.parent.mkdir(parents=True, exist_ok=True)
     good_table.write_bytes(b"\x89PNG\r\n\x1a\n" + b"demo")  # 造一个占位"接触表"
 
     good_probe = [{"probe": "路_地形_高差", "verdict": "reliable"},
