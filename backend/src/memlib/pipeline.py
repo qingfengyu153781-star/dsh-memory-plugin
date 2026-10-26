@@ -382,7 +382,14 @@ def ingest_staged(con, staged_root=None, progress=None):
     staged_root = staged_root or os.path.join(ROOT, "staged")
     results = []
     if not os.path.isdir(staged_root):
-        return {"planned": 0, "done": 0, "sessions": []}
+        # ★ 2026-10-26：目录不存在时**说出来**，别安静地返回 0。
+        #   实测教训：种子文件名写错（`s.jsonl` 而非 `s.atoms.jsonl`）时，
+        #   `{"staged_sessions": 0}` + exit 0 —— 看起来像"跑完了，只是没东西"，
+        #   实际是"一个文件都没匹配上"。两种情况的处置完全不同。
+        if progress:
+            progress("staged 目录不存在：%s（跳过其它来源导入）" % staged_root)
+        return {"planned": 0, "done": 0, "sessions": [], "note": "staged 目录不存在"}
+    seen_files = 0
     for source in sorted(os.listdir(staged_root)):
         sdir = os.path.join(staged_root, source)
         if not os.path.isdir(sdir):
@@ -390,6 +397,7 @@ def ingest_staged(con, staged_root=None, progress=None):
         for fn in sorted(os.listdir(sdir)):
             if not fn.endswith(".atoms.jsonl"):
                 continue
+            seen_files += 1
             path = os.path.join(sdir, fn)
             st = os.stat(path)
             row = con.execute("SELECT size, mtime FROM sources WHERE source=? AND path=?",
@@ -419,8 +427,15 @@ def ingest_staged(con, staged_root=None, progress=None):
             except Exception as ex:
                 con.rollback()
                 results.append({"session_id": fn, "source": source, "error": str(ex)})
-    return {"planned": len(results), "done": len([r for r in results if "error" not in r]),
-            "sessions": results}
+    out = {"planned": len(results), "done": len([r for r in results if "error" not in r]),
+           "sessions": results, "filesMatched": seen_files}
+    # ★ 一个候选文件都没匹配上时给出**可照做**的说明（文件名契约：`<任意>.atoms.jsonl`）
+    if seen_files == 0:
+        out["note"] = ("staged 下没有 *.atoms.jsonl 文件（导入件文件名必须以 .atoms.jsonl 结尾）"
+                       "；当前目录：%s" % staged_root)
+        if progress:
+            progress(out["note"])
+    return out
 
 
 def _read_staged(path, source):

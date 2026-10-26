@@ -171,7 +171,15 @@ def _cmd_ingest_inner(args):
             print("  FAILED", f["session_id"], f["error"])
     if args.source in ("all", "staged"):
         r2 = pipeline.ingest_staged(con)
-        print(json.dumps({"staged_sessions": r2["done"]}, ensure_ascii=False))
+        # ★ 2026-10-26：把"匹配到几个文件"与"有什么问题"一并报出来。
+        #   旧写法只打 `{"staged_sessions": N}` ⇒ 文件名写错时也是 N=0 + exit 0，
+        #   看起来像"跑完了只是没东西"，实际是"一个都没匹配上"。
+        _o = {"staged_sessions": r2["done"]}
+        if r2.get("filesMatched") is not None:
+            _o["files_matched"] = r2["filesMatched"]
+        if r2.get("note"):
+            _o["note"] = r2["note"]
+        print(json.dumps(_o, ensure_ascii=False))
     if args.coverage:
         coverage_mod.build(con)
         print("coverage ->", os.path.join(pipeline.REPORT_DIR, "COVERAGE.md"))
